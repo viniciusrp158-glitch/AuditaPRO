@@ -1,1 +1,13 @@
-{"private":true,"type":"module","scripts":{"test":"node test-checklist-ui.mjs"},"devDependencies":{"happy-dom":"20.0.11"}}
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test-checklist-ui.mjs && node test-checklist-ui-resilience.mjs && node test-edge-evidence.mjs"
+  },
+  "devDependencies": {
+    "happy-dom": "20.0.11"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

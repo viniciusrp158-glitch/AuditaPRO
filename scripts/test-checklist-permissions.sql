@@ -1,0 +1,56 @@
+begin;
+do $$
+declare admin_id uuid; actor uuid; leader_user uuid; support_user uuid; client_user uuid; leader_member uuid; support_member uuid; client_member uuid; org uuid; org2 uuid; cid uuid; pos uuid; pid uuid; mid uuid; subid uuid; role_name text; doctype text; lib jsonb; exlib jsonb; payload jsonb; aid uuid; q uuid; sid uuid; dayid uuid; req uuid; ar jsonb; rid uuid;
+begin
+ select id into admin_id from auth.users where raw_app_meta_data->>'platform_role'='admin' limit 1;
+ perform set_config('request.jwt.claim.sub',admin_id::text,true);
+ insert into public.organizations(legal_name,cnpj,segment) values('Teste isolado A','11222333000181','Teste') returning id into org;
+ insert into public.organizations(legal_name,cnpj,segment) values('Teste isolado B','11444777000161','Teste') returning id into org2;
+ select id into cid from public.audit_types where active limit 1;
+ select id into pos from public.positions where status='active' limit 1;
+ foreach role_name in array array['Auditor Líder','Auditor','Participante / Auditado'] loop
+  actor:=gen_random_uuid();select id into pid from public.access_profiles where name=role_name;
+  insert into auth.users(id,email,raw_app_meta_data,raw_user_meta_data) values(actor,actor::text||'@audita-test.invalid','{}',jsonb_build_object('full_name','Teste '||role_name));
+  insert into public.user_profiles(user_id,full_name,cpf,email,status) values(actor,'Teste '||role_name,case role_name when 'Auditor Líder' then '52998224725' when 'Auditor' then '11144477735' else '12345678909' end,actor::text||'@audita-test.invalid','active') on conflict(user_id) do update set full_name=excluded.full_name,cpf=excluded.cpf,status='active';
+  insert into public.organization_memberships(organization_id,user_id,position_id,access_profile_id,status,competence_status) values(org,actor,pos,pid,'active','approved') returning id into mid;
+  insert into public.profile_submissions(user_id,membership_id,state,version,access_profile_id,personal,professional) select actor,mid,'approved',1,pid,jsonb_build_object('cpf',u.cpf,'full_name',u.full_name),jsonb_build_object('position_id',pos) from public.user_profiles u where u.user_id=actor returning id into subid;
+  foreach doctype in array private.profile_required(pid) loop insert into public.user_documents(membership_id,document_type,storage_path,status,submission_id,is_current,reviewed_by,reviewed_at) values(mid,doctype,'test-rollback/'||gen_random_uuid(),'approved',subid,true,admin_id,now());end loop;
+  update public.organization_memberships set competence_status='approved' where id=mid;
+  assert private.profile_ready(mid),'Fixture deve ter perfil pronto';
+  if role_name='Auditor Líder' then leader_user:=actor;leader_member:=mid;elsif role_name='Auditor' then support_user:=actor;support_member:=mid;else client_user:=actor;client_member:=mid;end if;
+ end loop;
+ lib:=public.checklist_library('new','{}');rid:=(lib->>'id')::uuid;
+ payload:='{"lock_version":0,"header":{"name":"Geral para teste","category":"normative"},"reason":"Teste","sections":[{"title":"Seção","requirements":[{"reference":"4.1","prompt":"Requisito","questions":[{"prompt":"Pergunta","internal_notes":"SEGREDO DO MODELO"}]}]}]}'::jsonb||jsonb_build_object('revision_id',rid);
+ payload:=jsonb_set(payload,'{sections,0,criterion_id}',to_jsonb(cid));
+ lib:=public.checklist_library('publish',payload);req:=(lib->'sections'->0->'requirements'->0->>'id')::uuid;q:=(lib->'sections'->0->'requirements'->0->'questions'->0->>'id')::uuid;
+ exlib:=public.checklist_library('duplicate',jsonb_build_object('revision_id',rid));exlib:=public.checklist_library('publish',jsonb_build_object('revision_id',exlib->>'id','lock_version',0,'header',(exlib->'header')||jsonb_build_object('organization_id',org2),'sections',exlib->'sections','components','[]'::jsonb,'reason','Exclusivo B'));
+ -- A leader creates and plans without administrator intervention in the audit.
+ perform set_config('request.jwt.claim.sub',leader_user::text,true);
+ assert private.has_org_permission(org,'audit.create'),'Perfil líder sem audit.create';
+ payload:=public.audit_workspace('create',jsonb_build_object('organization_id',org,'type_id',cid,'title','Criada pelo líder','scope','Autonomia'));
+ aid:=(payload->>'id')::uuid;
+ assert (select leader_membership_id=leader_member from public.audits where id=aid);
+ assert not exists(select 1 from jsonb_array_elements(public.checklist_execution('suggest',jsonb_build_object('audit_id',aid))) x where x->>'id'=exlib->>'id');
+ begin perform public.checklist_execution('confirm',jsonb_build_object('audit_id',aid,'revisions',jsonb_build_array(exlib->>'id')));raise exception 'TEST: cliente cruzado';exception when raise_exception then if sqlerrm='TEST: cliente cruzado' then raise;end if;end;
+ perform public.checklist_execution('confirm',jsonb_build_object('audit_id',aid,'revisions',jsonb_build_array(rid)));
+ perform public.audit_workspace('team_save',jsonb_build_object('audit_id',aid,'members',jsonb_build_array(jsonb_build_object('id',leader_member),jsonb_build_object('id',support_member),jsonb_build_object('id',client_member))));
+ perform public.audit_workspace('plan_save',jsonb_build_object('audit_id',aid,'lock_version',(select lock_version from public.audits where id=aid),'items',jsonb_build_array(jsonb_build_object('title','Avaliação','date','2026-10-07','process','Processo','requirements',jsonb_build_array(req)))));
+ perform public.audit_workspace('plan_publish',jsonb_build_object('audit_id',aid,'lock_version',(select lock_version from public.audits where id=aid),'reason','Publicação pelo líder'));
+ perform public.audit_workspace('start',jsonb_build_object('audit_id',aid));
+ select d.id,s.id into dayid,sid from public.audit_days d join public.schedule_items s on s.audit_day_id=d.id where d.audit_id=aid;
+ ar:=public.checklist_execution('save',jsonb_build_object('audit_id',aid,'schedule_id',sid,'question_id',q,'lock_version',0,'operation_id',gen_random_uuid(),'patch',jsonb_build_object('notes','SEGREDO DA EXECUÇÃO')));
+ perform set_config('request.jwt.claim.sub',support_user::text,true);
+ perform public.checklist_execution('context',jsonb_build_object('audit_id',aid));
+ begin perform public.checklist_execution('save',jsonb_build_object('audit_id',aid,'schedule_id',sid,'question_id',q,'lock_version',1,'operation_id',gen_random_uuid()));raise exception 'TEST: apoio escreve';exception when raise_exception then if sqlerrm='TEST: apoio escreve' then raise;end if;end;
+ perform set_config('request.jwt.claim.sub',client_user::text,true);
+ payload:=public.audit_workspace('detail',jsonb_build_object('audit_id',aid));
+ assert position('SEGREDO' in payload::text)=0,'Projeção cliente vazou nota';assert not (payload->>'full_access')::boolean;
+ begin perform public.checklist_execution('context',jsonb_build_object('audit_id',aid));raise exception 'TEST: cliente checklist';exception when raise_exception then if sqlerrm='TEST: cliente checklist' then raise;end if;end;
+ begin perform public.audit_workspace('create',jsonb_build_object('organization_id',org,'type_id',cid,'title','Não permitido','scope','Não permitido'));raise exception 'TEST: cliente cria';exception when raise_exception then if sqlerrm='TEST: cliente cria' then raise;end if;end;
+ perform set_config('request.jwt.claim.sub',admin_id::text,true);
+ update public.audit_participants set active=false where audit_id=aid and membership_id=support_member;
+ update public.organization_memberships set status='inactive' where id=support_member;
+ perform set_config('request.jwt.claim.sub',support_user::text,true);
+ begin perform public.checklist_execution('context',jsonb_build_object('audit_id',aid));raise exception 'TEST: apoio inativo consulta';exception when raise_exception then if sqlerrm='TEST: apoio inativo consulta' then raise;end if;end;
+end $$;
+rollback;

@@ -12,7 +12,7 @@ Deno.serve(async request=>{
   if(authError||!user.user) return new Response(JSON.stringify({error:'Sessão inválida'}),{status:401,headers});
   const caller=createClient(url,Deno.env.get('SUPABASE_ANON_KEY')!,{global:{headers:{Authorization:authorization}},auth:{persistSession:false}});
   if((request.headers.get('content-type')||'').includes('application/json')){
-   const p=await request.json();const {data,error}=await caller.rpc('audit_evidence',{command:'view',payload:{id:p.id}});if(error)throw error;
+   const p=await request.json();const {data,error}=await caller.rpc('audit_evidence',{command:'view',payload:{id:p.id,document_id:p.document_id,kind:p.kind,audit_id:p.audit_id}});if(error)throw error;
    const signed=await admin.storage.from('audit-evidence-workspace').createSignedUrl(data.path,60);if(signed.error)throw signed.error;
    return new Response(JSON.stringify({url:signed.data.signedUrl}),{headers});
   }
@@ -24,7 +24,7 @@ Deno.serve(async request=>{
   const {data,error}=await caller.rpc('audit_evidence',{command:'authorize',payload});if(error)throw error;
   const operation=String(form.get('operation_id')||crypto.randomUUID());
   if(!/^[0-9a-f-]{36}$/i.test(operation))throw new Error('Operação inválida');
-  const prior=await admin.from('evidence_files').select('id').eq('assessment_id',data.assessment_id).eq('operation_id',operation).maybeSingle();if(prior.error)throw prior.error;if(prior.data)return new Response(JSON.stringify(prior.data),{headers});
+  const prior=await admin.from('evidence_files').select('id').eq('assessment_id',data.assessment_id).eq('operation_id',operation).maybeSingle();if(prior.error)throw prior.error;if(prior.data){await admin.from('assessment_uploads').update({status:'completed',updated_at:new Date().toISOString()}).eq('operation_id',operation).eq('assessment_id',data.assessment_id);return new Response(JSON.stringify(prior.data),{headers});}
   const path=`${data.audit_id}/${data.assessment_id}/${operation}.${mime==='application/pdf'?'pdf':mime==='image/png'?'png':'jpg'}`;
   const uploaded=await admin.storage.from('audit-evidence-workspace').upload(path,bytes,{contentType:mime,upsert:false});if(uploaded.error&&String(uploaded.error.statusCode)!=='409')throw uploaded.error;
   const recheck=await caller.rpc('audit_evidence',{command:'authorize',payload});

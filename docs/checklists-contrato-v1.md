@@ -1,5 +1,9 @@
 # Checklists — contrato de integração v1
 
+Atualização: o restante do fluxo de planejamento/checklists foi implementado em
+07/10/2026. Abaixo permanece o diagnóstico original; estado atual, testes e limites
+de homologação estão em [Validação v2](checklists-validacao-v2.md).
+
 Base: planejamento de checklists v0.1 enviado pelo proprietário do Audita PRO.
 Referência do código analisado: `0f82ba2`.
 Data: 07/10/2026 UTC.

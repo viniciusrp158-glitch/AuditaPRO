@@ -16,9 +16,9 @@ begin
  perform public.checklist_execution('confirm',jsonb_build_object('audit_id',aid,'revisions',jsonb_build_array(rid)));
  select leader_membership_id into leader from public.audits where id=aid;
  perform public.audit_workspace('team_save',jsonb_build_object('audit_id',aid,'members',jsonb_build_array(jsonb_build_object('id',leader))));
- perform public.audit_workspace('plan_save',jsonb_build_object('audit_id',aid,'lock_version',(select lock_version from public.audits where id=aid),'items',jsonb_build_array(jsonb_build_object('title','Atividade','date','2026-10-07','process','Processo A','requirements',jsonb_build_array(req)))));
+ perform public.audit_workspace('plan_save',jsonb_build_object('audit_id',aid,'lock_version',(select lock_version from public.audits where id=aid),'items',jsonb_build_array(jsonb_build_object('title','Dia 1 A','date','2026-10-07','process','Processo A','requirements',jsonb_build_array(req)),jsonb_build_object('title','Dia 2 A','date','2026-10-08','process','Processo A','requirements',jsonb_build_array(req)),jsonb_build_object('title','Dia 2 B','date','2026-10-08','process','Processo B','requirements',jsonb_build_array(req)))));
  perform public.audit_workspace('plan_publish',jsonb_build_object('audit_id',aid,'lock_version',(select lock_version from public.audits where id=aid),'reason','Teste'));
- select id into dayid from public.audit_days where audit_id=aid;
+ select id into dayid from public.audit_days where audit_id=aid and audit_date='2026-10-07';
  select id into sid from public.schedule_items where audit_day_id=dayid;
  perform public.audit_workspace('start',jsonb_build_object('audit_id',aid));
  perform public.audit_workspace('attendance',jsonb_build_object('audit_id',aid,'day_id',dayid,'members',jsonb_build_array(leader)));
@@ -46,7 +46,7 @@ begin
   ar:=public.checklist_execution('complete',payload);
   assert ar->>'operational_state'='completed';
  end loop;
- stats:=public.audit_workspace_stats(aid);assert (stats->>'total')::int=3;assert (stats->>'completed')::int=3;assert (stats->>'requirements')::int=1;
+ stats:=public.audit_workspace_stats(aid);assert (stats->>'total')::int=6;assert (stats->>'completed')::int=3;assert (stats->>'requirements')::int=1;
  -- Unrelated actor cannot read internal records or write through commands.
  select id into other_actor from auth.users where id<>actor limit 1;
  if other_actor is null then other_actor:=gen_random_uuid();end if;
@@ -61,8 +61,30 @@ begin
  doc:=public.audit_documents('close_day',jsonb_build_object('audit_id',aid,'day_id',dayid));
  select content into payload from public.daily_reports where id=(doc->>'id')::uuid;
  assert jsonb_array_length(payload->'assessments')=3;
+ assert (payload->'statistics'->>'total')::int=3;
+ assert (payload->'statistics'->>'completed')::int=3;
+ assert (payload->'cumulative_statistics'->>'total')::int=6;
  assert position('NOTA INTERNA NÃO PUBLICAR' in payload::text)=0;
  assert payload->'assessments'->0->>'sample_description'='Dois registros verificados';
  begin perform public.checklist_execution('save',jsonb_build_object('audit_id',aid,'schedule_id',sid,'question_id',q,'lock_version',2,'operation_id',gen_random_uuid()));raise exception 'TEST: dia fechado aceita gravação';exception when raise_exception then if sqlerrm='TEST: dia fechado aceita gravação' then raise;end if;end;
+ -- Re-evaluation on a later day never edits the first RDA or duplicates units.
+ select id into dayid from public.audit_days where audit_id=aid and audit_date='2026-10-08';
+ select si.id into sid from public.schedule_items si join public.audit_processes pr on pr.id=si.process_id where si.audit_day_id=dayid and pr.name='Processo A';
+ select id into q from public.checklist_questions where requirement_id=req order by sort_order limit 1;
+ perform public.audit_workspace('attendance',jsonb_build_object('audit_id',aid,'day_id',dayid,'members',jsonb_build_array(leader)));
+ ar:=public.checklist_execution('save',jsonb_build_object('audit_id',aid,'schedule_id',sid,'question_id',q,'lock_version',0,'operation_id',gen_random_uuid(),'patch',jsonb_build_object('result','conforming','sampling','no','evidence_text','Nova verificação do dia 2')));
+ assert (public.audit_workspace_stats(aid)->>'completed')::int=2,'Rascunho novo ainda conta como concluído';
+ ar:=public.checklist_execution('complete',jsonb_build_object('audit_id',aid,'schedule_id',sid,'question_id',q,'lock_version',1,'operation_id',gen_random_uuid(),'patch','{}'::jsonb));
+ assert (public.audit_workspace_stats(aid)->>'total')::int=6;
+ assert (public.audit_workspace_stats(aid)->>'completed')::int=3;
+ assert (select count(*) from public.requirement_assessments where audit_id=aid and question_id=q)=2;
+ assert (select content from public.daily_reports where id=(doc->>'id')::uuid)=payload,'RDA anterior modificado';
+ assert jsonb_array_length(private.workspace_snapshot(aid,null)->'assessments')=3,'Consolidado somou os dias';
+ -- New master revision does not change this audit's questions or frozen headers.
+ lib:=public.checklist_library('revise',jsonb_build_object('revision_id',rid));
+ lib:=public.checklist_library('publish',jsonb_build_object('revision_id',lib->>'id','lock_version',lib->'lock_version','header',(lib->'header')||jsonb_build_object('name','Nova revisão'), 'sections',lib->'sections','components',lib->'components','reason','Revisão posterior'));
+ assert (select revision_id from public.audit_checklists where audit_id=aid)=rid;
+ assert (select metadata->>'name' from public.audit_checklists where audit_id=aid)='Teste de execução';
+
 end $$;
 rollback;

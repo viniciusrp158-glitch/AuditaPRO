@@ -1,5 +1,8 @@
 # Audita PRO — entrega de checklists, incremento 1
 
+Registro histórico do primeiro incremento. Para a implementação atual e a matriz
+CHK-01 a CHK-28, consulte [Validação v2](checklists-validacao-v2.md).
+
 Data: 07/10/2026. Base do repositório: 0f82ba2.
 
 ## Implementado
