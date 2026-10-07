@@ -1,0 +1,18 @@
+import {Window} from 'happy-dom';
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const root=new URL('../outputs/',import.meta.url).pathname;
+const tick=()=>new Promise(r=>setTimeout(r,20));
+function setup(file,rpc,url='https://test.local/'){const w=new Window({url});w.document.write('<div id="auditTitle"></div><div id="auditIntro"></div><div id="auditActions"></div><div id="auditNotice"></div><div id="auditContent"></div>');w.AUDITA_PRO_REQUIRE_SESSION=async()=>({client:{rpc}});w.confirm=()=>true;w.eval(fs.readFileSync(root+file,'utf8'));return w;}
+const fixture={id:'rev',revision_number:1,status:'draft',lock_version:0,header:{name:'Teste',category:'custom'},reason:'Inicial',sections:[],components:[]};
+let saved;
+const lib=setup('audita-pro-checklists.js',async(name,{command,payload})=>({data:name==='audit_workspace'?{admin:true,organizations:[],types:[{id:'t',name:'Critério',code:'C'}],templates:[]}:command==='list'?{items:[]}:command==='new'?structuredClone(fixture):(saved=payload,{...fixture,...payload})}));
+await tick();assert.match(lib.document.body.textContent,/Biblioteca de Checklists/);
+const click=async(w,sel)=>{assert.ok(w.document.querySelector(sel),sel);w.document.querySelector(sel).click();await tick();};
+await click(lib,'[data-action=new]');await click(lib,'[data-action=section]');await click(lib,'[data-action^="requirement:"]');await click(lib,'[data-action^="question:"]');
+const prompt=lib.document.querySelector('[data-question] [data-key=prompt]');prompt.value='Pergunta preservada';prompt.dispatchEvent(new lib.Event('input',{bubbles:true}));await click(lib,'[data-action=save]');assert.equal(saved.sections[0].requirements[0].questions[0].prompt,'Pergunta preservada');assert.equal(saved.sections[0].requirements[0].questions[0].required,true);
+let revision=0;const calls=[];const question={id:'q',section:'S',reference:'4.1',prompt:'Pergunta?',allow_na:true};
+const context={audit:{code:'AUD-TEST',title:'Teste',checklist_confirmed_at:'now',status:'in_progress',timezone:'UTC'},company:'Teste',can_edit:true,models:[],activities:[{id:'s',audit_day_id:'d',title:'Avaliação',status:'in_progress'}],days:[{id:'d',audit_date:'2026-10-07',status:'in_progress'}]};
+const exe=setup('audita-pro-execution.js',async(name,{command,payload})=>{calls.push({command,payload});let data;if(command==='context')data=context;if(command==='questions')data={total:1,items:[question]};if(command==='save'||command==='complete')data={id:'a',...payload.patch,lock_version:++revision,updated_at:new Date().toISOString(),operational_state:command==='complete'?'completed':'in_progress'};if(command==='assessment')data={findings:[],complements:[],evidence:[],history:[]};return {data};},'https://test.local/?audit=a');
+await tick();await click(exe,'[data-act="question:q"]');const field=exe.document.querySelector('[data-edit=evidence_text]');field.value='Evidência <segura>';field.dispatchEvent(new exe.Event('input',{bubbles:true}));await click(exe,'[data-act=save]');assert.equal(calls.find(c=>c.command==='save').payload.patch.evidence_text,'Evidência <segura>');await click(exe,'[data-act=complete]');assert.ok(calls.find(c=>c.command==='complete'));assert.match(exe.document.querySelector('#saveStatus').textContent,/Concluído/);
+await lib.happyDOM.close();await exe.happyDOM.close();console.log('PASS: editor hierarchy capture; execution draft and explicit completion; HTML escaping.');

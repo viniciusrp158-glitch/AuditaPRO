@@ -1,0 +1,67 @@
+begin;
+do $$
+declare actor uuid; cid uuid; org uuid; lib jsonb; payload jsonb; aid uuid; rid uuid; req uuid; sid uuid; dayid uuid; leader uuid; q uuid; ar jsonb; other_actor uuid; other_org uuid; fid uuid; stats jsonb; doc jsonb; n int:=0;
+begin
+ select id into actor from auth.users where raw_app_meta_data->>'platform_role'='admin' limit 1;
+ perform set_config('request.jwt.claim.sub',actor::text,true);
+ select id into org from public.organizations where status='active' limit 1;
+ select id into cid from public.audit_types where active limit 1;
+ lib:=public.checklist_library('new','{}');rid:=(lib->>'id')::uuid;
+ payload:='{"header":{"name":"Teste de execução","category":"custom"},"reason":"Teste com rollback","sections":[{"title":"Seção","requirements":[{"reference":"4.1","prompt":"Requisito","questions":[{"prompt":"Pergunta A"},{"prompt":"Pergunta B"},{"prompt":"Pergunta C"}]}]}],"lock_version":0}'::jsonb;
+ payload:=payload||jsonb_build_object('revision_id',rid);
+ payload:=jsonb_set(payload,'{sections,0,criterion_id}',to_jsonb(cid));
+ lib:=public.checklist_library('publish',payload);req:=(lib->'sections'->0->'requirements'->0->>'id')::uuid;
+ payload:=public.audit_workspace('create',jsonb_build_object('organization_id',org,'type_id',cid,'title','Teste com rollback','scope','Validação transacional'));
+ aid:=(payload->>'id')::uuid;
+ perform public.checklist_execution('confirm',jsonb_build_object('audit_id',aid,'revisions',jsonb_build_array(rid)));
+ select leader_membership_id into leader from public.audits where id=aid;
+ perform public.audit_workspace('team_save',jsonb_build_object('audit_id',aid,'members',jsonb_build_array(jsonb_build_object('id',leader))));
+ perform public.audit_workspace('plan_save',jsonb_build_object('audit_id',aid,'lock_version',(select lock_version from public.audits where id=aid),'items',jsonb_build_array(jsonb_build_object('title','Atividade','date','2026-10-07','process','Processo A','requirements',jsonb_build_array(req)))));
+ perform public.audit_workspace('plan_publish',jsonb_build_object('audit_id',aid,'lock_version',(select lock_version from public.audits where id=aid),'reason','Teste'));
+ select id into dayid from public.audit_days where audit_id=aid;
+ select id into sid from public.schedule_items where audit_day_id=dayid;
+ perform public.audit_workspace('start',jsonb_build_object('audit_id',aid));
+ perform public.audit_workspace('attendance',jsonb_build_object('audit_id',aid,'day_id',dayid,'members',jsonb_build_array(leader)));
+ perform public.checklist_execution('suggest',jsonb_build_object('audit_id',aid));
+ perform public.checklist_execution('questions',jsonb_build_object('audit_id',aid,'schedule_id',sid));
+ for q in select id from public.checklist_questions where requirement_id=req order by sort_order loop
+  n:=n+1;
+  payload:=jsonb_build_object('audit_id',aid,'schedule_id',sid,'question_id',q,'lock_version',0,'operation_id',gen_random_uuid(),'patch',jsonb_build_object('result','conforming','evidence_text','Registro objetivo','notes','NOTA INTERNA NÃO PUBLICAR','sampling','yes'));
+  ar:=public.checklist_execution('save',payload);
+  assert (public.audit_workspace_stats(aid)->>'completed')::int=n-1;
+  assert public.checklist_execution('save',payload)=ar, 'Retentativa duplicou gravação';
+  begin perform public.checklist_execution('save',payload||jsonb_build_object('operation_id',gen_random_uuid()));raise exception 'TEST: conflito não detectado';exception when serialization_failure then null;end;
+  begin perform public.checklist_execution('complete',payload||jsonb_build_object('lock_version',1,'operation_id',gen_random_uuid(),'patch','{}'::jsonb));raise exception 'TEST: amostra vazia aceita';exception when raise_exception then if sqlerrm='TEST: amostra vazia aceita' then raise;end if;end;
+  payload:=payload||jsonb_build_object('lock_version',1,'operation_id',gen_random_uuid(),'patch',jsonb_build_object('sample_description','Dois registros verificados'));
+  if n=2 then payload:=jsonb_set(payload,'{patch,result}','"not_applicable"'::jsonb);end if;
+  if n=3 then
+   ar:=public.checklist_execution('save',payload||jsonb_build_object('patch',jsonb_build_object('result','nonconforming')));
+   begin perform public.checklist_execution('complete',payload||jsonb_build_object('lock_version',2,'operation_id',gen_random_uuid(),'patch',jsonb_build_object('sample_description','Dois registros verificados')));raise exception 'TEST: NC sem constatação aceita';exception when raise_exception then if sqlerrm='TEST: NC sem constatação aceita' then raise;end if;end;
+   doc:=public.checklist_execution('finding',jsonb_build_object('audit_id',aid,'assessment_id',ar->>'id','kind','NC','description','Constatação de teste','responsible','Responsável de teste','due_date','2026-10-30','operation_id',gen_random_uuid()));
+   perform public.checklist_execution('finding',jsonb_build_object('audit_id',aid,'assessment_id',ar->>'id','kind','OM','description','Melhoria de teste','operation_id',gen_random_uuid()));
+   perform public.checklist_execution('complement',jsonb_build_object('audit_id',aid,'assessment_id',ar->>'id','prompt','Aprofundamento','reason','Teste','response','Resposta','operation_id',gen_random_uuid()));
+   payload:=payload||jsonb_build_object('lock_version',2,'operation_id',gen_random_uuid());
+  end if;
+  ar:=public.checklist_execution('complete',payload);
+  assert ar->>'operational_state'='completed';
+ end loop;
+ stats:=public.audit_workspace_stats(aid);assert (stats->>'total')::int=3;assert (stats->>'completed')::int=3;assert (stats->>'requirements')::int=1;
+ -- Unrelated actor cannot read internal records or write through commands.
+ select id into other_actor from auth.users where id<>actor limit 1;
+ if other_actor is null then other_actor:=gen_random_uuid();end if;
+ perform set_config('request.jwt.claim.sub',other_actor::text,true);
+ begin perform public.checklist_library('list','{}');raise exception 'TEST: biblioteca liberada';exception when raise_exception then if sqlerrm='TEST: biblioteca liberada' then raise;end if;end;
+ begin perform public.checklist_execution('context',jsonb_build_object('audit_id',aid));raise exception 'TEST: contexto liberado';exception when raise_exception then if sqlerrm='TEST: contexto liberado' then raise;end if;end;
+ execute 'set local role authenticated';
+ assert (select count(*) from public.requirement_assessments where audit_id=aid)=0,'RLS expôs avaliações';
+ execute 'reset role';
+ perform set_config('request.jwt.claim.sub',actor::text,true);
+ perform public.audit_workspace('activity_complete',jsonb_build_object('audit_id',aid,'schedule_id',sid));
+ doc:=public.audit_documents('close_day',jsonb_build_object('audit_id',aid,'day_id',dayid));
+ select content into payload from public.daily_reports where id=(doc->>'id')::uuid;
+ assert jsonb_array_length(payload->'assessments')=3;
+ assert position('NOTA INTERNA NÃO PUBLICAR' in payload::text)=0;
+ assert payload->'assessments'->0->>'sample_description'='Dois registros verificados';
+ begin perform public.checklist_execution('save',jsonb_build_object('audit_id',aid,'schedule_id',sid,'question_id',q,'lock_version',2,'operation_id',gen_random_uuid()));raise exception 'TEST: dia fechado aceita gravação';exception when raise_exception then if sqlerrm='TEST: dia fechado aceita gravação' then raise;end if;end;
+end $$;
+rollback;

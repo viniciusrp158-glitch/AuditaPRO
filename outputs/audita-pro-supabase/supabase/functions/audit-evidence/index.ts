@@ -22,12 +22,15 @@ Deno.serve(async request=>{
   if(!mime||mime!==file.type)throw new Error('Conteúdo inválido: envie PDF, JPEG ou PNG');
   const payload={assessment_id:form.get('assessment_id')};
   const {data,error}=await caller.rpc('audit_evidence',{command:'authorize',payload});if(error)throw error;
-  const path=`${data.audit_id}/${crypto.randomUUID()}.${mime==='application/pdf'?'pdf':mime==='image/png'?'png':'jpg'}`;
-  const uploaded=await admin.storage.from('audit-evidence-workspace').upload(path,bytes,{contentType:mime,upsert:false});if(uploaded.error)throw uploaded.error;
+  const operation=String(form.get('operation_id')||crypto.randomUUID());
+  if(!/^[0-9a-f-]{36}$/i.test(operation))throw new Error('Operação inválida');
+  const prior=await admin.from('evidence_files').select('id').eq('assessment_id',data.assessment_id).eq('operation_id',operation).maybeSingle();if(prior.error)throw prior.error;if(prior.data)return new Response(JSON.stringify(prior.data),{headers});
+  const path=`${data.audit_id}/${data.assessment_id}/${operation}.${mime==='application/pdf'?'pdf':mime==='image/png'?'png':'jpg'}`;
+  const uploaded=await admin.storage.from('audit-evidence-workspace').upload(path,bytes,{contentType:mime,upsert:false});if(uploaded.error&&String(uploaded.error.statusCode)!=='409')throw uploaded.error;
   const recheck=await caller.rpc('audit_evidence',{command:'authorize',payload});
   if(recheck.error){await admin.storage.from('audit-evidence-workspace').remove([path]);throw recheck.error;}
-  const saved=await admin.from('evidence_files').insert({audit_id:data.audit_id,assessment_id:data.assessment_id,storage_path:path,uploaded_by:user.user.id,filename:file.name.slice(0,200),mime_type:mime,size_bytes:file.size}).select('id').single();
-  if(saved.error){await admin.storage.from('audit-evidence-workspace').remove([path]);throw saved.error;}
+  const saved=await admin.from('evidence_files').insert({audit_id:data.audit_id,assessment_id:data.assessment_id,storage_path:path,uploaded_by:user.user.id,filename:file.name.slice(0,200),mime_type:mime,size_bytes:file.size,operation_id:operation,caption:String(form.get('caption')||'').slice(0,2000)}).select('id').single();
+  if(saved.error){const existing=await admin.from('evidence_files').select('id').eq('assessment_id',data.assessment_id).eq('operation_id',operation).maybeSingle();if(existing.data)return new Response(JSON.stringify(existing.data),{headers});await admin.storage.from('audit-evidence-workspace').remove([path]);throw saved.error;}
   return new Response(JSON.stringify(saved.data),{headers});
  }catch(e){return new Response(JSON.stringify({error:e instanceof Error?e.message:String((e as {message?:string}).message||'Falha ao processar arquivo')}),{status:400,headers});}
 });

@@ -1,0 +1,1 @@
+{"private":true,"type":"module","scripts":{"test":"node test-checklist-ui.mjs"},"devDependencies":{"happy-dom":"20.0.11"}}
