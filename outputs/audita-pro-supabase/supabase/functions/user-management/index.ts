@@ -6,6 +6,8 @@ const secretKey = Deno.env.get('SUPABASE_SECRET_KEY') ?? Deno.env.get('SUPABASE_
 const admin = createClient(projectUrl, secretKey, { auth: { persistSession: false, autoRefreshToken: false } });
 const allowedOrigins = new Set((Deno.env.get('AUDITA_PRO_ALLOWED_ORIGINS') ?? 'http://localhost:4173,http://127.0.0.1:4173,http://localhost:4174,http://127.0.0.1:4174,http://localhost:5181,http://127.0.0.1:5181')
   .split(',').map((value) => value.trim()).filter(Boolean));
+// Current Audita PRO deployment; preserve any additional configured origins.
+allowedOrigins.add('https://audita-pro-validacao.vinicius-eloisa2.chatgpt.site');
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const roles = new Set(['Administrador', 'Auditor Líder', 'Auditor', 'Participante / Auditado']);
 
