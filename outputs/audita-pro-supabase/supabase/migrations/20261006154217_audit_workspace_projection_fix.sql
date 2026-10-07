@@ -1,0 +1,1 @@
+begin; do $$ declare def text; begin def:=pg_get_functiondef('private.workspace_detail(uuid)'::regprocedure); def:=replace(def,'v->''previous_data''-''notes''','(v->''previous_data'')-''notes'''); def:=replace(def,'v->''new_data''-''notes''','(v->''new_data'')-''notes''');execute def; end $$;commit;

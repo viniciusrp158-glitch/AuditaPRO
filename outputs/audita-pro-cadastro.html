@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#082846">
+  <title>Usuários e Organizações — Audita PRO</title>
+  <link rel="stylesheet" href="audita-pro-users.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="audita-pro-auth.js"></script>
+  <script src="audita-pro-users.js" defer></script>
+<link rel="stylesheet" href="audita-pro-header.css"><script src="audita-pro-header.js"></script></head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Menu principal">
+      <a class="brand" href="audita-pro-dashboard.html" aria-label="Audita PRO, ir ao Dashboard"><img src="audita-pro-logo.png" alt="Audita PRO"></a>
+      <nav>
+        <a href="audita-pro-dashboard.html">▦ <span>Dashboard</span></a>
+        <a href="audita-pro-auditorias.html">▤ <span>Auditorias</span></a>
+        <a href="audita-pro-dashboard.html#nao-conformidades">⚠ <span>Não conformidades</span></a>
+        <a href="audita-pro-dashboard.html#planos">☑ <span>Planos de ação</span></a>
+        <a href="audita-pro-dashboard.html#indicadores">▥ <span>Indicadores</span></a>
+        <a class="active" href="audita-pro-cadastro.html" aria-current="page">♟ <span>Usuários</span></a>
+        <a href="audita-pro-historico.html">▣ <span>Biblioteca de relatórios</span></a><a href="audita-pro-perfil.html" aria-label="Meu Perfil"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/></svg> <span>Meu Perfil</span></a>
+      </nav>
+    </aside>
+    <div class="content-shell">
+      <header class="topbar"><span class="crumb">Gestão da plataforma / Usuários</span><div class="account"><span id="accountEmail">Carregando sessão…</span><button id="logout" type="button">Sair</button></div></header>
+      <main class="main">
+        <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+        <section id="adminWorkspace" hidden>
+          <div class="page-heading"><div><span class="eyebrow">GESTÃO DE ACESSO</span><h1>Usuários e Organizações</h1><p>Gerencie pessoas, empresas auditadas, vínculos e documentos de competência.</p></div><div class="heading-actions"><button class="button secondary" id="newOrganization">Nova organização</button><button class="button" id="newUser">Novo usuário</button></div></div>
+          <div id="summary" class="summary" aria-label="Resumo"></div>
+          <div class="workspace-card">
+            <div class="tabs" role="tablist" aria-label="Seções de usuários"><button type="button" class="selected" data-tab="users" role="tab">Usuários</button><button type="button" data-tab="organizations" role="tab">Organizações</button><button type="button" data-tab="documents" role="tab">Validação de perfis</button><button type="button" data-tab="requests" role="tab">Solicitações de vínculo</button><button type="button" data-tab="invites" role="tab">Convites</button></div>
+            <div id="filterPanel" class="filters"></div>
+            <div id="listContent" class="list-content"><div class="empty">Carregando dados…</div></div>
+            <div id="pagination" class="pagination"></div>
+          </div>
+          <section id="detailPanel" class="detail-panel" hidden></section>
+        </section>
+        <section id="personalWorkspace" hidden>
+          <div class="page-heading"><div><span class="eyebrow">MINHA CONTA</span><h1>Meu cadastro</h1><p>Complete seus dados e envie o documento solicitado para análise.</p></div></div>
+          <div id="personalContent" class="workspace-card"></div>
+        </section>
+        <section id="fatal" class="workspace-card fatal" hidden></section>
+      </main>
+    </div>
+  </div>
+  <dialog id="formDialog" aria-labelledby="dialogTitle"><form id="dialogForm"><div class="dialog-header"><div><span class="eyebrow">AUDITA PRO</span><h2 id="dialogTitle"></h2></div><button type="button" id="dialogClose" class="icon-button" aria-label="Fechar">×</button></div><div id="dialogBody"></div><div class="dialog-actions"><button type="button" class="button secondary" id="dialogCancel">Cancelar</button><button type="submit" class="button" id="dialogSubmit">Salvar</button></div></form></dialog>
+</body>
+</html>
