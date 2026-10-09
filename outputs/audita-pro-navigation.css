@@ -1,0 +1,16 @@
+.ap-navigation nav[hidden], .ap-navigation a[hidden] { display: none !important; }
+.ap-nav-toggle { display: block; width: 100%; margin: 0 0 12px; padding: 10px;
+  border: 1px solid #7893ac; border-radius: 7px; background: transparent;
+  color: #fff; font: inherit; cursor: pointer; text-align: left; }
+.ap-navigation a:focus-visible, .ap-nav-toggle:focus-visible {
+  outline: 3px solid #9acbff; outline-offset: 2px;
+}
+.ap-navigation nav a[aria-current="page"] { background: #1263d8; color: #fff; }
+@media (max-width: 700px) {
+  .app:has(> .ap-navigation), .shell:has(> .ap-navigation) { display: block; }
+  aside.ap-navigation { display: block; position: relative; top: auto; width: 100%;
+    min-height: 0; height: auto; max-height: none; padding: 12px 16px;
+    box-sizing: border-box; }
+  .ap-navigation .brand { max-width: 190px; padding-bottom: 10px; }
+  .ap-navigation nav { display: grid; }
+}

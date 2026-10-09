@@ -73,16 +73,19 @@ const changed = new Set(git('diff', '--name-only', BASE, '--').trim().split('\n'
 for (const line of git('status', '--porcelain', '--untracked-files=all').split('\n').filter(Boolean)) {
   changed.add(line.slice(3));
 }
-const allowedChanges = new Set([...PAGES, THIS_TEST]);
+const allowedChanges = new Set([...PAGES, THIS_TEST, 'outputs/audita-pro-navigation.js', 'outputs/audita-pro-navigation.css', 'outputs/audita-pro-header.js', 'outputs/audita-pro-profile.js', 'scripts/test-b04-profile.mjs', 'scripts/test-b04-navigation-ui.mjs']);
 assert.deepEqual(
   [...changed].filter((path) => !allowedChanges.has(path) && !path.startsWith('docs/b04/')).sort(),
   [],
-  'B04 não pode alterar arquivos de autenticação, perfil, cabeçalho, biblioteca, permissões ou outros recursos',
+  'B04 altera somente navegação, integração de cabeçalho/perfil, testes e documentos explicitamente listados',
 );
 
 for (const path of PAGES) {
   const baseHtml = fromBase(path);
-  const currentHtml = readFileSync(resolve(ROOT, path), 'utf8');
+  const rawHtml = readFileSync(resolve(ROOT, path), 'utf8');
+  assert.equal((rawHtml.match(/src="audita-pro-navigation.js"/g) || []).length, 1);
+  assert.equal((rawHtml.match(/href="audita-pro-navigation.css"/g) || []).length, 1);
+  const currentHtml = rawHtml.replace('<link rel="stylesheet" href="audita-pro-navigation.css">\n<script src="audita-pro-navigation.js" defer></script>\n', '');
   const baseNav = navFrom(baseHtml, `${path} (${BASE})`);
   const currentNav = navFrom(currentHtml, path);
   const baseLinks = linksFrom(baseNav.html, `${path} (${BASE})`);

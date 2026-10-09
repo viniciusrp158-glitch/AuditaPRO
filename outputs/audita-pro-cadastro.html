@@ -9,7 +9,9 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="audita-pro-auth.js"></script>
   <script src="audita-pro-users.js" defer></script>
-<link rel="stylesheet" href="audita-pro-header.css"><script src="audita-pro-header.js"></script></head>
+<link rel="stylesheet" href="audita-pro-header.css"><script src="audita-pro-header.js"></script><link rel="stylesheet" href="audita-pro-navigation.css">
+<script src="audita-pro-navigation.js" defer></script>
+</head>
 <body>
   <div class="shell">
     <aside class="sidebar" aria-label="Menu principal">
@@ -17,7 +19,7 @@
       <nav aria-label="Navegação principal">
         <a href="audita-pro-dashboard.html">▦ <span>Dashboard</span></a>
         <a href="audita-pro-auditorias.html">▤ <span>Auditorias</span></a>
-        <a class="active" href="audita-pro-cadastro.html" aria-current="page">♟ <span>Usuários</span></a>
+        <a class="active" href="audita-pro-cadastro.html" aria-current="page" hidden>♟ <span>Usuários</span></a>
         <a href="audita-pro-historico.html">▣ <span>Biblioteca de relatórios</span></a><a href="audita-pro-perfil.html" aria-label="Meu Perfil"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/></svg> <span>Meu Perfil</span></a>
       </nav>
     </aside>

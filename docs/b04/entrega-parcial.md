@@ -1,5 +1,9 @@
 # B04 — Navegação e Meu Perfil: incremento independente
 
+> Registro histórico de 08/10. O avanço de 09/10, após implantação de B02,
+> está em [integracao-b02.md](integracao-b02.md). A dependência do backend B02
+> foi verificada; permanece a conciliação do código e a entrada corporativa B05.
+
 Data: 08/10/2026. Responsável: Codex 03, com revisão final do agente principal.
 Estado: **preparação e implementação parcial em branch isolada; não liberado**.
 
