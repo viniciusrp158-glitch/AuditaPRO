@@ -17,7 +17,7 @@ begin
  select leader_membership_id into leader from public.audits where id=aid;
  perform public.audit_workspace('team_save',jsonb_build_object('audit_id',aid,'members',jsonb_build_array(jsonb_build_object('id',leader))));
  perform public.audit_workspace('plan_save',jsonb_build_object('audit_id',aid,'lock_version',(select lock_version from public.audits where id=aid),'items',jsonb_build_array(jsonb_build_object('title','Dia 1 A','date','2026-10-07','process','Processo A','requirements',jsonb_build_array(req)),jsonb_build_object('title','Dia 2 A','date','2026-10-08','process','Processo A','requirements',jsonb_build_array(req)),jsonb_build_object('title','Dia 2 B','date','2026-10-08','process','Processo B','requirements',jsonb_build_array(req)))));
- perform public.audit_workspace('plan_publish',jsonb_build_object('audit_id',aid,'lock_version',(select lock_version from public.audits where id=aid),'reason','Teste'));
+ perform private.workspace_command('plan_publish',jsonb_build_object('audit_id',aid,'lock_version',(select lock_version from public.audits where id=aid),'reason','Teste'));
  select id into dayid from public.audit_days where audit_id=aid and audit_date='2026-10-07';
  select id into sid from public.schedule_items where audit_day_id=dayid;
  perform public.audit_workspace('start',jsonb_build_object('audit_id',aid));

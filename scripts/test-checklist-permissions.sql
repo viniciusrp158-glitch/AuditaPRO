@@ -4,8 +4,8 @@ declare admin_id uuid; actor uuid; leader_user uuid; support_user uuid; client_u
 begin
  select id into admin_id from auth.users where raw_app_meta_data->>'platform_role'='admin' limit 1;
  perform set_config('request.jwt.claim.sub',admin_id::text,true);
- insert into public.organizations(legal_name,cnpj,segment) values('Teste isolado A','11222333000181','Teste') returning id into org;
- insert into public.organizations(legal_name,cnpj,segment) values('Teste isolado B','11444777000161','Teste') returning id into org2;
+ insert into public.organizations(legal_name,cnpj,segment) values('Teste isolado A','55667788000186','Teste') returning id into org;
+ insert into public.organizations(legal_name,cnpj,segment) values('Teste isolado B','99887766000105','Teste') returning id into org2;
  select id into cid from public.audit_types where active limit 1;
  select id into pos from public.positions where status='active' limit 1;
  foreach role_name in array array['Auditor Líder','Auditor','Participante / Auditado'] loop
@@ -35,7 +35,7 @@ begin
  perform public.checklist_execution('confirm',jsonb_build_object('audit_id',aid,'revisions',jsonb_build_array(rid)));
  perform public.audit_workspace('team_save',jsonb_build_object('audit_id',aid,'members',jsonb_build_array(jsonb_build_object('id',leader_member),jsonb_build_object('id',support_member),jsonb_build_object('id',client_member))));
  perform public.audit_workspace('plan_save',jsonb_build_object('audit_id',aid,'lock_version',(select lock_version from public.audits where id=aid),'items',jsonb_build_array(jsonb_build_object('title','Avaliação','date','2026-10-07','process','Processo','requirements',jsonb_build_array(req)))));
- perform public.audit_workspace('plan_publish',jsonb_build_object('audit_id',aid,'lock_version',(select lock_version from public.audits where id=aid),'reason','Publicação pelo líder'));
+ perform private.workspace_command('plan_publish',jsonb_build_object('audit_id',aid,'lock_version',(select lock_version from public.audits where id=aid),'reason','Publicação pelo líder'));
  perform public.audit_workspace('start',jsonb_build_object('audit_id',aid));
  select d.id,s.id into dayid,sid from public.audit_days d join public.schedule_items s on s.audit_day_id=d.id where d.audit_id=aid;
  ar:=public.checklist_execution('save',jsonb_build_object('audit_id',aid,'schedule_id',sid,'question_id',q,'lock_version',0,'operation_id',gen_random_uuid(),'patch',jsonb_build_object('notes','SEGREDO DA EXECUÇÃO')));

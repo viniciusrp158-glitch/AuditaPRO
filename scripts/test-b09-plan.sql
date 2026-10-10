@@ -15,7 +15,7 @@ begin perform public.audit_plan(cmd, payload); insert into t_res(name, ok, detai
 exception when others then insert into t_res(name, ok, detail) values (label, position(lower(needle) in lower(sqlerrm)) > 0, sqlerrm); end $$;
 create function pg_temp.check_errors(st jsonb, n int) returns jsonb language sql as $$ select c->'errors' from jsonb_array_elements(st->'checks') c where (c->>'n')::int = n $$;
 create function pg_temp.lv() returns int language sql security definer as $$ select lock_version from public.audits where id = (select v::uuid from t_ids where k = 'A') $$;
-create function pg_temp.emission(vid uuid) returns uuid language sql security definer as $$ select emission_id from public.audit_plan_versions where id = vid $$;
+create function pg_temp.emission(vid uuid) returns uuid language sql security definer as $$ select emission_id from private.plan_revisions where id = vid $$;
 -- Processador simulado (B08): posse, "upload" e confirmação com o hash conferido.
 create function pg_temp.emit(vid uuid) returns jsonb language plpgsql security definer as $$
 declare eid uuid := pg_temp.emission(vid); c jsonb; begin
@@ -95,8 +95,8 @@ do $$ declare op uuid := gen_random_uuid(); r jsonb; r2 jsonb; s jsonb; begin
  perform pg_temp.err('Outra validação com revisão aguardando PDF é recusada', 'validate', jsonb_build_object('audit_id', pg_temp.id('A'), 'operation_id', gen_random_uuid(), 'expected_lock_version', pg_temp.lv()), 'aguardando o PDF');
 end $$;
 reset role;
-do $$ declare v public.audit_plan_versions%rowtype; e private.document_emissions; a public.audits%rowtype; begin
- select * into v from public.audit_plan_versions where id = pg_temp.id('V0');
+do $$ declare v private.plan_revisions%rowtype; e private.document_emissions; a public.audits%rowtype; begin
+ select * into v from private.plan_revisions where id = pg_temp.id('V0');
  select * into e from private.document_emissions where id = v.emission_id;
  select * into a from public.audits where id = pg_temp.id('A');
  perform pg_temp.ok('Revisão congelada com SHA-256 e pedido de emissão com o mesmo conteúdo', v.state = 'validated' and v.content_sha256 = e.content_sha256
@@ -123,7 +123,7 @@ do $$ declare r jsonb; a public.audits%rowtype; begin
  r := pg_temp.emit(pg_temp.id('V0'));
  select * into a from public.audits where id = pg_temp.id('A');
  perform pg_temp.ok('PA-13 publicado só após o PDF: Rev.00 vigente, plano liberado', r->'emission'->>'status' = 'published' and a.plan_revision = 1 and a.status = 'planned'
-   and (select state from public.audit_plan_versions where id = pg_temp.id('V0')) = 'published', r::text);
+   and (select state from private.plan_revisions where id = pg_temp.id('V0')) = 'published', r::text);
  perform pg_temp.ok('Cronograma materializado com as identidades do rascunho', (select count(*) from public.schedule_items where id in (pg_temp.id('k1'), pg_temp.id('k2'), pg_temp.id('k3')) and not withdrawn) = 3
    and (select assignee_ids @> array[pg_temp.id('lm'), pg_temp.id('am')] and cardinality(assignee_ids) = 2 from public.schedule_items where id = pg_temp.id('k2'))
    and (select count(*) from public.schedule_requirements where schedule_item_id = pg_temp.id('k2')) = 2
@@ -167,13 +167,13 @@ reset role;
 do $$ declare a public.audits%rowtype; begin
  select * into a from public.audits where id = pg_temp.id('A');
  perform pg_temp.ok('PER-10 enquanto o PDF da Rev.01 é gerado, a Rev.00 segue vigente e o cronograma não muda', a.plan_revision = 1
-   and (select state from public.audit_plan_versions where id = pg_temp.id('V0')) = 'published'
+   and (select state from private.plan_revisions where id = pg_temp.id('V0')) = 'published'
    and (select d.audit_date from public.schedule_items s join public.audit_days d on d.id = s.audit_day_id where s.id = pg_temp.id('k2')) = '2026-11-03');
  perform pg_temp.emit(pg_temp.id('V1'));
  select * into a from public.audits where id = pg_temp.id('A');
  perform pg_temp.ok('Rev.01 publicada; Rev.00 substituída e preservada', a.plan_revision = 2
-   and (select state || '>' || (superseded_by = pg_temp.id('V1'))::text from public.audit_plan_versions where id = pg_temp.id('V0')) = 'superseded>true'
-   and (select content->'revision'->>'label' from public.audit_plan_versions where id = pg_temp.id('V0')) = 'Rev.00');
+   and (select state || '>' || (superseded_by = pg_temp.id('V1'))::text from private.plan_revisions where id = pg_temp.id('V0')) = 'superseded>true'
+   and (select content->'revision'->>'label' from private.plan_revisions where id = pg_temp.id('V0')) = 'Rev.00');
  perform pg_temp.ok('Atividade não iniciada que perdeu requisito ganha nova identidade, com rastreio', (select withdrawn and replaced_by is not null from public.schedule_items where id = pg_temp.id('k2'))
    and (select count(*) from public.schedule_requirements where schedule_item_id = (select replaced_by from public.schedule_items where id = pg_temp.id('k2'))) = 1
    and (select x->>'id' from jsonb_array_elements(a.plan_draft) x where x->>'key' = pg_temp.v('k2')) = (select replaced_by::text from public.schedule_items where id = pg_temp.id('k2')));
@@ -205,7 +205,7 @@ reset role;
 do $$ declare items jsonb; begin
  -- Restaura o rascunho publicado (Rev.01) com uma alteração de horário em k4.
  select jsonb_agg(case when x->>'key' = pg_temp.v('k4') then x || '{"end_time":"12:00"}'::jsonb else x end) into items
-  from jsonb_array_elements((select content->'schedule' from public.audit_plan_versions where id = pg_temp.id('V1'))) x;
+  from jsonb_array_elements((select content->'schedule' from private.plan_revisions where id = pg_temp.id('V1'))) x;
  update public.audits set plan_draft = items where id = pg_temp.id('A');
 end $$;
 select pg_temp.as_user('01'); set local role authenticated;
@@ -220,7 +220,7 @@ do $$ declare r jsonb; begin
  update public.audit_days set status = 'completed', started_at = now(), ended_at = now() where audit_id = pg_temp.id('A') and audit_date = '2026-11-04';
  r := pg_temp.emit(pg_temp.id('V2'));
  perform pg_temp.ok('Bloqueio na aplicação: PDF íntegro fica pronto com o motivo, sem publicar', r->'emission'->>'status' = 'ready'
-   and r->'emission'->>'last_error' like 'Arquivo íntegro; publicação bloqueada:%' and (select state from public.audit_plan_versions where id = pg_temp.id('V2')) = 'validated'
+   and r->'emission'->>'last_error' like 'Arquivo íntegro; publicação bloqueada:%' and (select state from private.plan_revisions where id = pg_temp.id('V2')) = 'validated'
    and (select plan_revision from public.audits where id = pg_temp.id('A')) = 2, r->'emission'->>'last_error');
  perform pg_temp.ok('Pronto não volta para a varredura automática', private.b08_sweep() = 0);
 end $$;
@@ -241,14 +241,32 @@ reset role;
 
 -- PA-16 / imutabilidade: cadastro alterado não muda revisão nem PDF já emitido.
 do $$ declare h text; begin
- select content_sha256 into h from public.audit_plan_versions where id = pg_temp.id('V0');
+ select content_sha256 into h from private.plan_revisions where id = pg_temp.id('V0');
  update public.organizations set legal_name = 'TESTE Organização X Renomeada' where id = '0000000a-0000-4000-8000-00000000000a';
- perform pg_temp.ok('PA-16 revisão emitida mantém o cabeçalho original', (select content->'client'->>'legal_name' from public.audit_plan_versions where id = pg_temp.id('V0')) = 'TESTE Organização X'
+ perform pg_temp.ok('PA-16 revisão emitida mantém o cabeçalho original', (select content->'client'->>'legal_name' from private.plan_revisions where id = pg_temp.id('V0')) = 'TESTE Organização X'
    and (select content->'client'->>'legal_name' from private.document_emissions where id = pg_temp.emission(pg_temp.id('V0'))) = 'TESTE Organização X'
-   and (select encode(sha256(convert_to(content::text, 'UTF8')), 'hex') from public.audit_plan_versions where id = pg_temp.id('V0')) = h);
- begin update public.audit_plan_versions set content = '{}' where id = pg_temp.id('V0'); perform pg_temp.ok('Conteúdo de revisão é imutável', false);
+   and (select encode(sha256(convert_to(content::text, 'UTF8')), 'hex') from private.plan_revisions where id = pg_temp.id('V0')) = h);
+ begin update private.plan_revisions set content = '{}' where id = pg_temp.id('V0'); perform pg_temp.ok('Conteúdo de revisão é imutável', false);
  exception when others then perform pg_temp.ok('Conteúdo de revisão é imutável', position('imutável' in sqlerrm) > 0, sqlerrm); end;
- begin delete from public.audit_plan_versions where id = pg_temp.id('V0'); perform pg_temp.ok('Revisão não é excluída', false);
+ begin delete from private.plan_revisions where id = pg_temp.id('V0'); perform pg_temp.ok('Revisão não é excluída', false);
  exception when others then perform pg_temp.ok('Revisão não é excluída', position('não são excluídas' in sqlerrm) > 0, sqlerrm); end;
+end $$;
+
+-- Contrato legado (correção 7a–7e): audit_plan_versions recebe uma linha por publicação, em lista, lida pelo B03 e pelo legado.
+do $$ declare m jsonb; pr jsonb; begin
+ perform pg_temp.ok('Publicações no contrato legado: lista de atividades e version_number = plan_revision',
+   (select string_agg(v.version_number::text || ':' || jsonb_typeof(v.content) || ':' || (r.id is not null)::text, ',' order by v.version_number)
+      from public.audit_plan_versions v left join private.plan_revisions r on r.plan_version_id = v.id where v.audit_id = pg_temp.id('A')) = '1:array:true,2:array:true'
+   and (select plan_revision from public.audits where id = pg_temp.id('A')) = 2
+   and (select bool_and(x ? 'date' and x ? 'requirements' and x ? 'title') from public.audit_plan_versions v cross join jsonb_array_elements(v.content) x where v.audit_id = pg_temp.id('A')),
+   (select string_agg(version_number || ':' || jsonb_typeof(content), ',') from public.audit_plan_versions where audit_id = pg_temp.id('A')));
+ perform pg_temp.ok('Publicação legada vinculada à revisão B09 (Rev.01 = versão 2, com as atividades vigentes)',
+   (select v.version_number from private.plan_revisions r join public.audit_plan_versions v on v.id = r.plan_version_id where r.id = pg_temp.id('V1')) = 2
+   and (select count(*) from public.audit_plan_versions v cross join jsonb_array_elements(v.content) x
+         where v.id = (select plan_version_id from private.plan_revisions where id = pg_temp.id('V1')) and (x->>'withdrawn')::boolean) = 0);
+ m := private.b03_temporal_metrics(pg_temp.id('A'), clock_timestamp());
+ pr := private.b03_public_schedule_progress(pg_temp.id('A'), clock_timestamp());
+ perform pg_temp.ok('Métricas do B03 e progresso público leem as publicações sem erro', m is not null and pr is not null, left(m::text, 120));
+ perform pg_temp.ok('Lista de revisões não duplica publicações vinculadas', (select count(*) from jsonb_array_elements(private.b09_versions_json(pg_temp.id('A'), true)) x where x->>'state' = 'legacy') = 0);
 end $$;
 select n, name, ok, left(detail, 140) from t_res order by n;

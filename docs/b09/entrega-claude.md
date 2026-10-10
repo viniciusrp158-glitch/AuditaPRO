@@ -17,7 +17,7 @@
 2. **Prévia:** PDF gerado no servidor com a marca "PRÉVIA — SEM VALIDADE". Nada é gravado.
 3. **Validar:**
    - congela o retrato completo da revisão: cliente, código, CNPJ, endereço, localização, período, critérios e edições, natureza, tipo, modalidade, objetivo, equipe, outros participantes, cronograma com dias numerados, escopo, comentários, FPA de referência, controle de revisões e as nove notas do Anexo A (modelo v1);
-   - grava o retrato com SHA-256 em `audit_plan_versions` (estado `validated`);
+   - grava o retrato com SHA-256 em `private.plan_revisions` (estado `validated`);
    - cria o pedido de emissão do B08 (modelo `plan` v1, arquivo `AUD-AAAA-n_Plano_RevNN.pdf`) e aciona o processador pelo servidor;
    - duplo clique devolve a mesma revisão (`operation_id`);
    - Rev.00 não exige motivo; a partir da Rev.01, o motivo é obrigatório.
@@ -25,6 +25,7 @@
    - a revisão vira `published` e a anterior, `superseded`;
    - o cronograma executável recebe a revisão sem DELETE (AD-15): atividade omitida fica retirada; atividade não iniciada que perde requisitos ganha nova identidade (`replaced_by`), copiando o escopo de perguntas; atividade movida registra origem e motivo; dia planejado sem atividade fica retirado e é numerado depois dos ativos; dias já iniciados mantêm o número;
    - o rascunho em edição recebe as identidades publicadas sem perder alterações feitas depois da validação;
+   - a publicação é registrada também em `audit_plan_versions`, no contrato legado (lista das atividades vigentes, `version_number` = `plan_revision`), que as métricas do B03, o detalhe da auditoria e os documentos legados leem;
    - `plan_revision` sobe, o sino avisa uma única vez (gatilho existente) e a execução fica liberada.
 5. **Falha e bloqueio:**
    - Falha no PDF: nada é publicado; o pedido é retomado (pelo botão ou pela varredura) ou a revisão é descartada com motivo.
@@ -64,25 +65,29 @@
 - `…214129_b09_6b_plan_client_view`
 - `…214133_b09_6c_block_legacy_publish`
 - `…214442_b09_6d_conditional_publish`
+- Correção (AD-26): `…220407_b09_7a_plan_revisions_table`, `…220450_b09_7b_snapshot_history`, `…220518_b09_7c_plan_commands`, `…220553_b09_7d_plan_apply`, `…220604_b09_7e_apply_blocker`
 
 **Edge Function:** `document-emission` v2, com o modelo `plan` v1, a prévia e o autoteste do modelo.
 
 **Provas no runtime real:**
 - O autoteste do modelo do Plano, com 120 atividades sintéticas e as notas lidas do banco de produção, gerou 12 páginas em 23 ms; o arquivo foi gravado, conferido e retirado.
-- `audit_plan('status')` com o Admin real na auditoria em rascunho devolveu as 15 verificações, com 9 pendências esperadas.
+- `audit_plan('status')` com o Admin real na auditoria em rascunho devolveu as 15 verificações, com 9 pendências esperadas (repetido após a correção AD-26: Rev.00, sem revisões abertas).
 - Nenhum pedido nem arquivo ficou na produção. Os avisos de segurança não têm itens novos.
 
 ## Testes
 
 | Teste | Resultado |
 |---|---|
-| `scripts/run-sql-test.sh scripts/test-b09-plan.sql` | 40/40 |
+| `scripts/run-sql-test.sh scripts/test-b09-plan.sql` (inclui o contrato legado e as métricas do B03 após publicar) | 44/44 |
 | `tsx scripts/test-b09-plan-pdf.mts` (retrato real + plano extenso) | 17/17 |
 | `node scripts/test-b09-publication-ui.mjs` | 21/21 |
 | `tsx scripts/test-b08-emit-flow.mts` (inclui o autoteste do modelo do Plano; banco próprio) | 17/17 |
 | Regressão B04–B08 (SQL, motor e interfaces) | aprovada |
+| Testes legados do checklist (continuidade, execução, v2) | aprovados; publicam o plano pela função interna, já que `plan_publish` foi recusado (AD-25) |
 
 ## Pendente / limites
+
+- **Testes legados `test-checklist-documents.sql` e `test-checklist-permissions.sql`:** param antes do plano, na regra de apoio habilitado do B02 (deriva anterior ao B09). Ficam para a revisão de documentos do B11.
 
 - **D08:** identidade visual (logo claro para impressão e modelo de cabeçalho). O texto institucional segue o Anexo A sem alteração.
 - **B11:** prova do PA-18 com RDA emitido e uso do "plano vigente ao abrir o dia" (`opening_plan_version` legado).
