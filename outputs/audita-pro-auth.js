@@ -16,7 +16,7 @@ window.createAuditaProClient = function () {
 
 window.AUDITA_PRO_SAFE_NEXT = function () {
   const requested = new URLSearchParams(location.search).get('next') || 'audita-pro-dashboard.html';
-  const allowed = new Set(['audita-pro-execution.html', 'audita-pro-checklists.html', 'audita-pro-auditorias.html', 'audita-pro-notificacoes.html', 'audita-pro-perfil.html', 'audita-pro-dashboard.html', 'audita-pro-relatorio-diario.html', 'audita-pro-cadastro.html', 'audita-pro-historico.html']);
+  const allowed = new Set(['audita-pro-execution.html', 'audita-pro-checklists.html', 'audita-pro-auditorias.html', 'audita-pro-notificacoes.html', 'audita-pro-perfil.html', 'audita-pro-dashboard.html', 'audita-pro-relatorio-diario.html', 'audita-pro-cadastro.html', 'audita-pro-historico.html', 'audita-pro-biblioteca.html']);
   return allowed.has(requested) ? requested : 'audita-pro-dashboard.html';
 };
 

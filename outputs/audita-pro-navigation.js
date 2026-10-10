@@ -34,19 +34,36 @@
       const target = new URL(link.getAttribute('href'), location.href).pathname.split('/').pop();
       if (target === page()) link.setAttribute('aria-current', 'page');
       else link.removeAttribute('aria-current');
-      // Never display administrative navigation before the server responds.
-      if (target === 'audita-pro-cadastro.html') link.hidden = true;
+      // Never display restricted navigation before the server responds.
+      if (RESTRICTED.has(target)) link.hidden = true;
+      // The system history lives inside the library (B05/RS-07): highlight the library entry there.
+      if (page() === 'audita-pro-historico.html' && target === 'audita-pro-biblioteca.html') link.setAttribute('aria-current', 'page');
     }
   }
-  window.AUDITA_PRO_UPDATE_NAVIGATION = context => {
-    mount();
+  const RESTRICTED = new Set(['audita-pro-cadastro.html', 'audita-pro-biblioteca.html']);
+  let navigationRequest = 0;
+  const setLink = (target, visible) => {
     for (const link of nav?.querySelectorAll('a') || []) {
-      const target = new URL(link.getAttribute('href'), location.href).pathname.split('/').pop();
-      if (target === 'audita-pro-cadastro.html') {
-        link.hidden = context?.admin !== true;
-      }
+      if (new URL(link.getAttribute('href'), location.href).pathname.split('/').pop() === target) link.hidden = !visible;
     }
   };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
-  else mount();
+  // context: profile_command('context') do servidor; client: cliente Supabase autenticado.
+  window.AUDITA_PRO_UPDATE_NAVIGATION = async (context, client) => {
+    mount();
+    const request = ++navigationRequest;
+    setLink('audita-pro-cadastro.html', context?.admin === true);
+    if (!context || !client) { setLink('audita-pro-biblioteca.html', false); return; }
+    try {
+      const { data, error } = await client.rpc('corporate_library', { command: 'context', payload: {} });
+      if (request !== navigationRequest) return;
+      // D07/V-07: Admin, Auditor Líder e Auditor; Participante não recebe a biblioteca corporativa.
+      setLink('audita-pro-biblioteca.html', !error && data?.can_read === true);
+    } catch {
+      if (request === navigationRequest) setLink('audita-pro-biblioteca.html', false);
+    }
+  };
+  // O cabeçalho pode ter recebido o contexto antes deste módulo (script defer): aplicar o último estado.
+  const init = () => { mount(); const last = window.AUDITA_PRO_NAV_STATE; if (last) window.AUDITA_PRO_UPDATE_NAVIGATION(last.context, last.client); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 })();

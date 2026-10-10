@@ -14,3 +14,6 @@
   .ap-navigation .brand { max-width: 190px; padding-bottom: 10px; }
   .ap-navigation nav { display: grid; }
 }
+
+/* Ícone de Meu Perfil em qualquer página (antes dependia de audita-pro-profile.css). */
+.ap-navigation .profile-person{display:inline-block;width:18px;height:18px;vertical-align:middle;flex-shrink:0}
