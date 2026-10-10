@@ -11,7 +11,7 @@ Coordenação: Claude (C0). Atualizado em 10/10/2026. Estados mantidos separados
 | B03 | ✔ | ✔ | ✔ | — | ✔ (informado) | |
 | B04 | ✔ | ✔ | frontend não publicado | ✔ 40 verificações de menu + testes Codex | pendente | Hospedagem `auditapro.app.br` a definir |
 | B05 | ✔ | ✔ | parcial: migrations 1–3 + Edge Function; **parte 4 aguarda aprovação** | ✔ 42 SQL + 11 conteúdo + 31 UI | pendente | |
-| B06 | rascunho Codex | — | — | — | — | |
+| B06 | ✔ | ✔ | ✔ 4 migrations + Edge Function `audit-fpa-files` (frontend não publicado) | ✔ 46 SQL + 6 conteúdo + 25 UI + teste Codex | pendente | |
 | B07 | rascunho Codex | — | — | — | — | |
 | B08 | rascunho Codex | — | — | — | — | |
 | B09–B13 | — | — | — | — | — | |

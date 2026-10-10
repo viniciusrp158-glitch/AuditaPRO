@@ -32,7 +32,6 @@ function snapshotFiles() {
 }
 
 const BROWSER_SHIM = `
-window.__fail = null;
 const __fs = { readFileSync(p) { const k = p instanceof URL ? decodeURIComponent(p.pathname) : String(p); if (!(k in __SNAP.files)) throw new Error('arquivo ausente no teste: ' + k); return __SNAP.files[k]; },
   readdirSync(p) { const k = String(p).endsWith('/') ? String(p) : String(p) + '/'; return __SNAP.dirs[k] || []; } };
 const __canon = v => v && typeof v === 'object' ? (Array.isArray(v) ? v.map(__canon) : Object.fromEntries(Object.keys(v).sort().map(k => [k, __canon(v[k])]))) : v;
@@ -42,6 +41,10 @@ const assert = {
   notEqual(a, b, m) { if (a === b) throw new AssertionError((m || 'notEqual') + ': ' + JSON.stringify(a)); },
   deepEqual(a, b, m) { if (JSON.stringify(__canon(a)) !== JSON.stringify(__canon(b))) throw new AssertionError((m || 'deepEqual') + ': ' + JSON.stringify(a) + ' vs ' + JSON.stringify(b)); },
   ok(v, m) { if (!v) throw new AssertionError(m || 'ok'); },
+  doesNotMatch(s, r, m) { if (r.test(s)) throw new AssertionError((m || 'doesNotMatch') + ': ' + JSON.stringify(String(s).slice(0, 300)) + ' ~ ' + r); },
+  notDeepEqual(a, b, m) { if (JSON.stringify(__canon(a)) === JSON.stringify(__canon(b))) throw new AssertionError(m || 'notDeepEqual'); },
+  async rejects(p, m) { try { await (typeof p === 'function' ? p() : p); } catch { return; } throw new AssertionError(m || 'rejects'); },
+  throws(fn, m) { try { fn(); } catch { return; } throw new AssertionError(m || 'throws'); },
   match(s, r, m) { if (!r.test(s)) throw new AssertionError((m || 'match') + ': ' + JSON.stringify(String(s).slice(0, 300)) + ' !~ ' + r); },
 };
 class Window {
@@ -69,7 +72,7 @@ async function run(testFile) {
   const snap = snapshotFiles();
   const outcome = await page.evaluate(async ({ shim, body, snap }) => {
     window.__SNAP = snap;
-    const fn = new Function(`return (async () => { ${shim}\n${body}\n })()`);
+    const fn = new Function(`return (async () => { ${shim}\n return await (async () => { ${body}\n })(); })()`);
     try { await fn(); return { ok: true }; } catch (e) { return { ok: false, message: e.message, stack: e.stack }; }
   }, { shim: BROWSER_SHIM, body: source, snap });
   await browser.close(); server.close();
