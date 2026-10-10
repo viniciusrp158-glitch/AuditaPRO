@@ -42,3 +42,13 @@ grant select on storage.buckets to authenticated, anon;
 create function storage.foldername(name text) returns text[] language plpgsql immutable as
  $$ declare p text[]; begin p := string_to_array(name, '/'); return p[1:array_length(p, 1) - 1]; end $$;
 grant execute on function storage.foldername(text) to anon, authenticated, service_role;
+-- pg_net e pg_cron (B08): stubs que registram as chamadas para verificação nos testes.
+create schema net; create schema cron;
+create table net.stub_requests (id bigserial primary key, url text, body jsonb, headers jsonb, timeout_milliseconds int, created_at timestamptz default clock_timestamp());
+create function net.http_post(url text, body jsonb default '{}'::jsonb, params jsonb default '{}'::jsonb,
+ headers jsonb default '{"Content-Type": "application/json"}'::jsonb, timeout_milliseconds int default 5000) returns bigint
+ language sql as $$ insert into net.stub_requests (url, body, headers, timeout_milliseconds) values (url, body, headers, timeout_milliseconds) returning id $$;
+create table cron.stub_jobs (jobid bigserial primary key, jobname text unique, schedule text, command text);
+create function cron.schedule(job_name text, schedule text, command text) returns bigint language sql as
+ $$ insert into cron.stub_jobs (jobname, schedule, command) values (job_name, schedule, command)
+    on conflict (jobname) do update set schedule = excluded.schedule, command = excluded.command returning jobid $$;

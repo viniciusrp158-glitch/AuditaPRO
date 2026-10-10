@@ -20,7 +20,7 @@
   const fmtDateTime = v => v ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(v)) : '—';
   const fmtSize = n => n >= 1048576 ? `${(n / 1048576).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
   const uuid = () => crypto.randomUUID();
-  let auth, ctx, seq = 0, reportsLoaded = false;
+  let auth, ctx, seq = 0, reportsLoaded = false, emitterLoaded = false;
   const filters = { search: '', doc_type: '', status: '', page: 0 };
 
   async function rpc(command, payload = {}) {
@@ -242,10 +242,13 @@
 
   // ---------- Abas e inicialização ----------
   function selectTab(which) {
-    const reports = which === 'reports';
-    $('#tabCorporate').setAttribute('aria-selected', String(!reports)); $('#tabReports').setAttribute('aria-selected', String(reports));
-    $('#corporatePanel').hidden = reports; $('#reportsPanel').hidden = !reports;
+    const reports = which === 'reports', emitter = which === 'emitter';
+    $('#tabCorporate').setAttribute('aria-selected', String(which === 'corporate')); $('#tabReports').setAttribute('aria-selected', String(reports));
+    $('#tabEmitter').setAttribute('aria-selected', String(emitter));
+    $('#corporatePanel').hidden = which !== 'corporate'; $('#reportsPanel').hidden = !reports; $('#emitterPanel').hidden = !emitter;
     if (reports && !reportsLoaded) { reportsLoaded = true; window.AUDITA_PRO_DOCUMENT_LIBRARY(auth.client, $('#reportsPanel')); }
+    // B08: emissor de documentos (somente Administrador; o servidor revalida em cada chamada).
+    if (emitter && !emitterLoaded) { emitterLoaded = true; window.AuditaEmitterPanel.mount(auth.client, $('#emitterPanel')); }
   }
   async function start() {
     try { auth = await window.AUDITA_PRO_REQUIRE_SESSION(); } catch { $('#corporatePanel').innerHTML = '<div class="lib-state error" role="alert"><strong>Não foi possível validar a sessão</strong><a href="audita-pro-login.html">Entrar novamente</a></div>'; return; }
@@ -264,6 +267,7 @@
     $('#libInsert')?.addEventListener('click', insertDialog);
     $('#libTabs').hidden = false;
     $('#tabCorporate').onclick = () => selectTab('corporate'); $('#tabReports').onclick = () => selectTab('reports');
+    if (ctx.can_history && window.AuditaEmitterPanel) { $('#tabEmitter').hidden = false; $('#tabEmitter').onclick = () => selectTab('emitter'); }
     selectTab('corporate'); // RS-05/CA-03: a entrada sempre abre os documentos.
     await loadList();
   }
