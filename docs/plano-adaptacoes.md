@@ -19,6 +19,9 @@ cada mudança é registrada aqui com motivo e impacto.
 | AD-09 | 10/10 | B06 | Criação exigia título, escopo e modelo de checklist | `create_draft`: só cliente obrigatório (PA-04), idempotente; modelos escolhidos depois em "Confirmar checklists" (composição versionada existente) | PA-04 |
 | AD-10 | 10/10 | B06 | FPA (Codex: regras em JS, sem persistência) | FPA persistente: `private.audit_fpa*`, bucket `audit-fpa` (PDF/DOCX/XLSX), Edge Function `audit-fpa-files`; versões e eventos imutáveis | PA-11/12, D09 |
 | AD-11 | 10/10 | B05/B06 | — | O limite do conector é a aprovação de comandos `delete`, não o tamanho; partes com `delete` aguardam aprovação do proprietário | Diagnóstico corrigido |
+| AD-12 | 10/10 | B07 | Múltiplos auditores por linha (legado: um só `assignee_membership_id`) | Auditores em `schedule_items.assignee_ids uuid[]`, com backfill a partir de `assignee_membership_id` e validação contra a equipe no servidor | Evita `delete` em cada salvamento (aprovação do conector) e mantém a linha como uma unidade versionável |
+| AD-13 | 10/10 | B07/B09 | Editor salva e publica o cronograma | B07 salva só o rascunho (`audits.plan_draft`, formato canônico). A materialização em `schedule_items`/`schedule_requirements` e o snapshot ficam na publicação do B09, que vai substituir o `plan_publish` legado (ele descarta os campos novos e sorteia IDs) | Publicação única e auditável; não renumera dias iniciados |
+| AD-14 | 10/10 | B07 | Transferência do restante | Continuidade por `schedule_items.continuation_of` (cadeia origem→destino) + `schedule_movements` (antes/depois, motivo, autor); `record_outcome` aceita só parcial/não realizada | PA-17/RDA-08 sem conclusão fictícia |
 
 ## Correções de erros herdados (Codex)
 

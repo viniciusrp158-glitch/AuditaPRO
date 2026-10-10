@@ -8,3 +8,17 @@
 .pw-form{border:1px solid #e0e8f1;border-radius:10px;padding:.8rem 1rem;margin:.8rem 0;background:#fbfcfd}.pw-form h3{margin:.1rem 0 .4rem;font-size:15px;color:#123b59}
 .pw-table{margin:.4rem 0 1rem}.pw-events{margin:.6rem 0}.pw-events ul{margin:.4rem 0;padding-left:1.2rem;color:#40576c;font-size:13px}
 .pw-table-wrap{overflow-x:auto;max-width:100%}.pw-table-wrap .data-table{min-width:520px}.identification-summary dd,.pw-form{overflow-wrap:anywhere}
+/* B07 — editor de cronograma */
+.se-summary{margin:.4rem 0 .8rem;color:#334e60}.se-err{color:#a73830;font-weight:700}.se-ok{color:#147347;font-weight:700}.se-warn{color:#8a5a00;font-weight:700}
+.notice.warn{background:#fff8e6;border-color:#f1dca8;color:#6d4b00}
+.se-rows{display:grid;gap:12px}.se-row{border:1px solid #d8e1e8;border-radius:12px;padding:12px 14px;background:#fff}.se-row.has-error{border-color:#e7b9b4;box-shadow:inset 3px 0 0 #c2433a}
+.se-row-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}.se-row-head h3{margin:0;font-size:15px;color:#123b59;flex:1 1 220px;overflow-wrap:anywhere}
+.se-tags{display:flex;gap:6px;flex-wrap:wrap}.se-actions{display:flex;gap:6px;flex-wrap:wrap}
+.button.small{padding:5px 9px;font-size:12px}
+.se-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:0 12px}.se-grid .field:nth-child(5){grid-column:1/3}
+.se-team,.se-reqs{border:1px solid #e0e8f1;border-radius:9px;padding:8px 12px;margin:8px 0;display:flex;flex-wrap:wrap;gap:6px 16px}.se-team legend,.se-reqs legend{font-size:12px;font-weight:700;color:#3b5067;padding:0 4px}
+.se-team label,.se-reqs label{font-size:13px;display:flex;gap:6px;align-items:center}
+.se-detail summary{cursor:pointer;font-weight:700;color:#1555a3;font-size:13px;margin:6px 0}
+.se-issues{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:4px;font-size:13px}.se-issues .error{color:#9d2f29}.se-issues .warning{color:#7a5300}
+.se-published{margin-top:1rem}.se-table-wrap{overflow-x:auto}.se-table-wrap .data-table{min-width:640px}
+@media(max-width:700px){.se-grid{grid-template-columns:1fr 1fr}.se-grid .field:first-child,.se-grid .field:nth-child(5){grid-column:1/-1}}
