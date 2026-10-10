@@ -3,6 +3,9 @@
 // A service role nunca vai ao navegador; o download é uma URL temporária de 60 s do arquivo persistido da revisão.
 import { createClient } from 'npm:@supabase/supabase-js@2.57.0';
 import { type Deps, processEmission, runTicket } from './emit.ts';
+import { BUILTIN_ASSETS } from './assets/index.ts';
+import { renderDocument } from './pdf/layout.ts';
+import { planDoc } from './templates/plan.ts';
 
 const url = Deno.env.get('SUPABASE_URL')!;
 const secret = Deno.env.get('SUPABASE_SECRET_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -85,6 +88,16 @@ Deno.serve(async request => {
       const signed = await admin.storage.from(file.bucket).createSignedUrl(file.path, 60, { download: file.filename });
       if (signed.error) throw new Error('Falha ao preparar o download. Tente novamente.');
       return reply({ url: signed.data.signedUrl, filename: file.filename, sha256: file.sha256, size_bytes: file.size_bytes }, 200, origin);
+    }
+    if (action === 'preview_plan') {
+      // Prévia de conferência (B09): retrato atual do rascunho, marcado como PRÉVIA, sem gravar nada.
+      const { data: snap, error } = await caller.rpc('audit_plan', { command: 'preview', payload: { audit_id: body.audit_id } });
+      if (error) throw Object.assign(new Error(error.message), { code: error.code });
+      const r = await renderDocument(planDoc(snap, { draft: true }), { logo: BUILTIN_ASSETS['builtin:logo'].load() }, { idSeed: `preview:${body.audit_id}:${Date.now()}` });
+      return new Response(r.bytes as unknown as BodyInit, { status: 200, headers: {
+        'Content-Type': 'application/pdf', 'Cache-Control': 'no-store', 'Vary': 'Origin', 'Access-Control-Allow-Origin': origins.has(origin) ? origin : '',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Content-Disposition': 'inline; filename="previa-plano.pdf"' } });
     }
     let emissionId = String(body.emission_id ?? '');
     if (action === 'request_specimen') {

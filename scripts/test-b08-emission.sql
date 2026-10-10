@@ -29,15 +29,15 @@ do $$ declare aid uuid; lm uuid; am uuid; e private.document_emissions; e2 priva
  insert into public.audits (organization_id, code, title, leader_membership_id, created_by, workspace_version, purpose, party, modality)
  values ('0000000a-0000-4000-8000-00000000000a', 'AUD-E', 'Emissão', lm, 'a0000000-0000-4000-8000-000000000002', 1, 'A definir', 'first', 'presential') returning id into aid;
  insert into public.audit_participants (audit_id, membership_id, participant_type) values (aid, lm, 'leader'), (aid, am, 'auditor');
- e := private.b08_request('plan', aid, v, '0000000a-0000-4000-8000-00000000000a', aid, 'Rev.00', 'Plano de auditoria AUD-E Rev.00', 'plano-AUD-E-rev00.pdf',
-   'plan', 1, '{"cabecalho":{"cliente":"Ação & Cia"},"linhas":[1,2,3]}', false, 'a0000000-0000-4000-8000-000000000002');
- e2 := private.b08_request('plan', aid, v, '0000000a-0000-4000-8000-00000000000a', aid, 'Rev.00', 'Plano de auditoria AUD-E Rev.00', 'plano-AUD-E-rev00.pdf',
-   'plan', 1, '{"linhas":[1,2,3],"cabecalho":{"cliente":"Ação & Cia"}}', false, 'a0000000-0000-4000-8000-000000000002');
+ e := private.b08_request('final_report', aid, v, '0000000a-0000-4000-8000-00000000000a', aid, 'Rev.00', 'Plano de auditoria AUD-E Rev.00', 'plano-AUD-E-rev00.pdf',
+   'final_report', 1, '{"cabecalho":{"cliente":"Ação & Cia"},"linhas":[1,2,3]}', false, 'a0000000-0000-4000-8000-000000000002');
+ e2 := private.b08_request('final_report', aid, v, '0000000a-0000-4000-8000-00000000000a', aid, 'Rev.00', 'Plano de auditoria AUD-E Rev.00', 'plano-AUD-E-rev00.pdf',
+   'final_report', 1, '{"linhas":[1,2,3],"cabecalho":{"cliente":"Ação & Cia"}}', false, 'a0000000-0000-4000-8000-000000000002');
  insert into t_ids values ('A', aid), ('E', e.id), ('V', v);
  perform pg_temp.ok('Pedido repetido da mesma revisão reaproveita o mesmo pedido (sem segundo documento)', e2.id = e.id and
    (select count(*) from private.document_emissions where version_id = v) = 1, e.content_sha256);
  begin
-  perform private.b08_request('plan', aid, v, '0000000a-0000-4000-8000-00000000000a', aid, 'Rev.00', 'x', 'x.pdf', 'plan', 1, '{"linhas":[9]}', false, 'a0000000-0000-4000-8000-000000000002');
+  perform private.b08_request('final_report', aid, v, '0000000a-0000-4000-8000-00000000000a', aid, 'Rev.00', 'x', 'x.pdf', 'final_report', 1, '{"linhas":[9]}', false, 'a0000000-0000-4000-8000-000000000002');
   perform pg_temp.ok('Mesma revisão com outro conteúdo é recusada', false, 'aceitou');
  exception when others then perform pg_temp.ok('Mesma revisão com outro conteúdo é recusada', position('outro conteúdo' in sqlerrm) > 0, sqlerrm); end;
  perform pg_temp.ok('Pedido nasce pendente com SHA-256 do conteúdo', e.status = 'pending' and e.content_sha256 = encode(sha256(convert_to(e.content::text, 'UTF8')), 'hex'));
@@ -70,7 +70,7 @@ reset role; set local role service_role;
 do $$ declare c jsonb; c2 jsonb; c3 jsonb; c4 jsonb; r jsonb; begin
  c := public.document_emission_worker('claim', jsonb_build_object('emission_id', pg_temp.id('E'), 'triggered_by', 'a0000000-0000-4000-8000-000000000002'));
  perform pg_temp.ok('Primeira tentativa assume a posse com caminho reservado', c->>'state' = 'claimed' and (c->>'attempt')::int = 1
-   and c->>'storage_path' like '0000000a-0000-4000-8000-00000000000a/plan/' || pg_temp.id('E') || '/tentativa-1-%.pdf' and c->'content' ? 'linhas', c->>'storage_path');
+   and c->>'storage_path' like '0000000a-0000-4000-8000-00000000000a/final_report/' || pg_temp.id('E') || '/tentativa-1-%.pdf' and c->'content' ? 'linhas', c->>'storage_path');
  c2 := public.document_emission_worker('claim', jsonb_build_object('emission_id', pg_temp.id('E')));
  perform pg_temp.ok('Segunda chamada concorrente não cria outra tentativa', c2->>'state' = 'busy'
    and pg_temp.n_att(pg_temp.id('E')) = 1, c2->>'state');

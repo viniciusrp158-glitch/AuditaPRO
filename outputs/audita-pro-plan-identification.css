@@ -22,3 +22,34 @@
 .se-issues{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:4px;font-size:13px}.se-issues .error{color:#9d2f29}.se-issues .warning{color:#7a5300}
 .se-published{margin-top:1rem}.se-table-wrap{overflow-x:auto}.se-table-wrap .data-table{min-width:640px}
 @media(max-width:700px){.se-grid{grid-template-columns:1fr 1fr}.se-grid .field:first-child,.se-grid .field:nth-child(5){grid-column:1/-1}}
+/* B09 — validação e publicação do plano */
+.pp-wrap h2 { margin: 0 0 12px; }
+.pp-banner { display: grid; gap: 4px; padding: 12px 14px; border-radius: 10px; border: 1px solid #c9d3df; background: #f4f7fa; margin-bottom: 14px; }
+.pp-banner.ok { border-color: #8cc5a3; background: #eef8f2; }
+.pp-banner.busy { border-color: #9fbbe0; background: #eef4fc; }
+.pp-banner.error { border-color: #e2a3a3; background: #fdf1f1; }
+.pp-banner span { color: #3d4b5c; }
+.pp-section { margin: 18px 0; }
+.pp-section h3 { margin: 0 0 8px; font-size: 1rem; }
+.pp-checks { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.pp-checks > li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 8px 10px; border-radius: 8px; border: 1px solid #e1e7ee; }
+.pp-checks > li.fail { border-color: #e6b7b7; background: #fff8f8; }
+.pp-checks > li ul { margin: 4px 0 6px 18px; padding: 0; color: #7a2b2b; }
+.pp-mark { font-weight: 700; color: #1f7a45; }
+.pp-checks > li.fail .pp-mark { color: #a32626; }
+.pp-warnings { margin: 0 0 0 18px; color: #6b5310; }
+.pp-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
+.pp-reason { display: grid; gap: 4px; font-weight: 600; max-width: 640px; }
+.pp-reason textarea { width: 100%; font: inherit; }
+.pp-table-wrap { overflow-x: auto; }
+.pp-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.pp-table th, .pp-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e1e7ee; vertical-align: top; }
+.pp-table tr.pp-superseded td, .pp-table tr.pp-discarded td { color: #66717e; }
+.pp-versions { margin-bottom: 16px; }
+.pp-msg.error { color: #a32626; }
+@media (max-width: 640px) {
+  .pp-table thead { display: none; }
+  .pp-table tr { display: grid; border-bottom: 1px solid #e1e7ee; padding: 6px 0; }
+  .pp-table td { border: 0; padding: 2px 4px; }
+  .pp-table td::before { content: attr(data-label) ': '; font-weight: 600; }
+}

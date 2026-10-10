@@ -2,6 +2,7 @@
 // B09 acrescenta "plan", B10–B12 acrescentam "rda" — sem remover versões que ainda tenham pedidos abertos.
 import { type DocModel, RenderError } from '../pdf/layout.ts';
 import { specimen } from './specimen.ts';
+import { planDoc } from './plan.ts';
 
 export type AssetRef =
   | { source: 'builtin'; id: string }
@@ -17,6 +18,9 @@ const SPECIMEN_ASSETS: Record<string, AssetRef> = {
 };
 
 export const TEMPLATES: Record<string, Record<number, Template>> = {
+  plan: {
+    1: content => ({ doc: planDoc(content), assets: { logo: { source: 'builtin', id: 'builtin:logo' } } }),
+  },
   specimen: {
     1: (content, ctx) => {
       const { doc, assets } = specimen((content.params ?? {}) as Record<string, never>, {

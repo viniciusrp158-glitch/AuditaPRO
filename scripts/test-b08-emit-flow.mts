@@ -5,7 +5,10 @@ import { writeFileSync } from 'node:fs';
 import { processEmission, runTicket, type Deps } from '../outputs/audita-pro-supabase/supabase/functions/document-emission/emit.ts';
 import { sha256Hex } from '../outputs/audita-pro-supabase/supabase/functions/document-emission/pdf/zlib.ts';
 
-const PG = ['-h', process.env.PGTEST_HOST ?? '/home/claude/.pgtest', '-p', process.env.PGTEST_PORT ?? '54329', '-U', 'postgres', '-d', process.env.PGTEST_DB ?? 'auditapro_test', '-qAt', '-v', 'ON_ERROR_STOP=1'];
+// Banco próprio (recriado a cada execução): este teste grava de verdade e não pode contaminar os testes SQL em transação.
+const FLOW_DB = process.env.PGTEST_FLOW_DB ?? 'auditapro_flow';
+execFileSync('bash', [new URL('./localdb/rebuild.sh', import.meta.url).pathname], { env: { ...process.env, PGTEST_DB: FLOW_DB }, stdio: 'ignore' });
+const PG = ['-h', process.env.PGTEST_HOST ?? '/home/claude/.pgtest', '-p', process.env.PGTEST_PORT ?? '54329', '-U', 'postgres', '-d', FLOW_DB, '-qAt', '-v', 'ON_ERROR_STOP=1'];
 const sql = (q: string, role = 'postgres') => execFileSync('psql', [...PG, '-c', `set role ${role};`, '-c', q], { encoding: 'utf8' }).trim();
 const j = (v: unknown) => `$j$${JSON.stringify(v)}$j$::jsonb`;
 let pass = 0, fail = 0;
@@ -104,6 +107,12 @@ k = await runTicket(deps(), ts);
 const st = JSON.parse(sql(`select result from private.document_emission_tickets where ticket = '${ts}'`));
 ok('Autoteste: gera, grava, confere e retira o arquivo; medições guardadas', k.valid === true && st.ok === true && st.pages > 20
   && ![...store.keys()].some(x => x.includes(ts)), `${st.pages} pág, ${st.bytes} B, geração ${st.render_ms} ms, total ${st.total_ms} ms`);
+
+const snap = JSON.parse(execFileSync('cat', ['scripts/fixtures/b09-plan-snapshot.json'], { encoding: 'utf8' }));
+const tp = sql(`select private.b08_dispatch('selftest', null, ${j({ template: 'plan', snapshot: snap })})`);
+k = await runTicket(deps(), tp);
+const sp = JSON.parse(sql(`select result from private.document_emission_tickets where ticket = '${tp}'`));
+ok('Autoteste do modelo do Plano (prévia) no mesmo caminho do runtime', k.valid === true && sp.ok === true && sp.template === 'plan' && sp.pages >= 3, `${sp.pages} pág`);
 
 console.log(`---- ${pass}/${pass + fail} verificações do fluxo de emissão aprovadas`);
 process.exit(fail ? 1 : 0);

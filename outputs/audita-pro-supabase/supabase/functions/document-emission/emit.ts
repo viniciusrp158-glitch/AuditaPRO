@@ -5,6 +5,7 @@ import { ENGINE_VERSION, renderDocument } from './pdf/layout.ts';
 import { sha256Hex } from './pdf/zlib.ts';
 import { type AssetRef, resolveTemplate } from './templates/index.ts';
 import { samplePng } from './templates/specimen.ts';
+import { planDoc } from './templates/plan.ts';
 
 export const MAX_PDF_BYTES = 50 * 1024 * 1024;
 const ASSET_BUCKETS = new Set(['audit-evidence', 'audit-evidence-workspace']);
@@ -106,9 +107,11 @@ function memory(): Record<string, number> {
 export async function selfTest(d: Deps, ticket: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
   const now = d.now ?? (() => performance.now());
   const t0 = now();
-  const template = resolveTemplate('specimen', 1);
-  const { doc, assets } = template({ params, code: 'AUTOTESTE', issued_at: new Date().toISOString() },
-    { title: 'Autoteste', revision_label: 'Rev.00', version_id: ticket, requested_at: new Date().toISOString() });
+  const isPlan = params.template === 'plan' && typeof params.snapshot === 'object' && params.snapshot !== null;
+  const { doc, assets } = isPlan
+    ? { doc: planDoc(params.snapshot as Record<string, unknown>, { draft: true }), assets: { logo: { source: 'builtin', id: 'builtin:logo' } as AssetRef } }
+    : resolveTemplate('specimen', 1)({ params, code: 'AUTOTESTE', issued_at: new Date().toISOString() },
+      { title: 'Autoteste', revision_label: 'Rev.00', version_id: ticket, requested_at: new Date().toISOString() });
   const bytesByKey: Record<string, Uint8Array> = {};
   for (const [key, ref] of Object.entries(assets)) bytesByKey[key] = await loadAsset(d, ref);
   const t1 = now();
@@ -121,7 +124,7 @@ export async function selfTest(d: Deps, ticket: string, params: Record<string, u
   const verified = await sha256Hex(stored);
   const t4 = now();
   await d.remove('document-emissions', path);
-  return { ok: verified === r.sha256 && stored.length === r.bytes.length, engine: ENGINE_VERSION, params, pages: r.pages, bytes: r.bytes.length,
+  return { ok: verified === r.sha256 && stored.length === r.bytes.length, engine: ENGINE_VERSION, template: isPlan ? 'plan' : 'specimen', params: isPlan ? { template: 'plan' } : params, pages: r.pages, bytes: r.bytes.length,
     images: r.images, sha256: r.sha256, assets_ms: Math.round(t1 - t0), render_ms: Math.round(t2 - t1), upload_ms: Math.round(t3 - t2),
     verify_ms: Math.round(t4 - t3), total_ms: Math.round(now() - t0), warnings: r.warnings, ...memory() };
 }
