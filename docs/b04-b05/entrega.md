@@ -30,15 +30,15 @@ Itens restritos começam ocultos e permanecem ocultos se a consulta de permissã
 | 20261010165809 | b05_corporate_library_1_schema | aplicada |
 | 20261010165914 | b05_corporate_library_2_read | aplicada |
 | 20261010170002 | b05_corporate_library_3_manage | aplicada |
-| (pendente) | b05_corporate_library_4_lifecycle | **aguarda aprovação no conector** (contém DELETE de arquivo de rascunho) |
+| 20261010173959 | b05_corporate_library_4_lifecycle | aplicada em 10/10 às 14h39. Não usa DELETE: a remoção de arquivo de rascunho fica marcada (AD-15). O conteúdo em produção é idêntico ao do arquivo |
 
-Até a parte 4 ser aplicada, upload/remoção/publicação/arquivamento retornam erro; leitura, cadastro e revisões funcionam. O frontend novo ainda não está publicado.
+Com a parte 4 aplicada, todos os comandos estão disponíveis em produção. A prova: `publish` com uma revisão inexistente percorre o caminho completo e responde "Revisão não encontrada". A Edge Function `corporate-library-files` está na v2, com os ajustes de tipagem. O frontend novo ainda não foi publicado.
 
 ## Testes (resultados reais nesta sessão)
 
 | Teste | Ambiente | Resultado |
 |---|---|---|
-| `scripts/run-sql-test.sh scripts/test-b05-corporate-library.sql` | Postgres local com as 65 migrations | 42/42 |
+| `scripts/run-sql-test.sh scripts/test-b05-corporate-library.sql` | Postgres local com todas as migrations | 46/46 (inclui a remoção marcada AD-15) |
 | `scripts/test-b05-office-validation.mjs` (tsx) | Node 22, arquivos reais gerados | 11/11 |
 | `scripts/test-b05-library-ui.mjs` | Chromium, servidor simulado | 31/31 |
 | `scripts/test-b04-menu-profiles.mjs` | Chromium, 4 perfis × 9 páginas + celular | 40/40 |
@@ -47,7 +47,7 @@ Até a parte 4 ser aplicada, upload/remoção/publicação/arquivamento retornam
 | Prova na produção (transação revertida) | Admin real: `context` e `list` | ok |
 | Advisors de segurança | produção | nenhum alerta novo; tabelas privadas sem policy são intencionais |
 
-**Não testado ainda:** Edge Function contra o Storage real (depende da parte 4 e de uma sessão autenticada no navegador); upload grande medido; homologação com contas reais (B14/B15).
+**Não testado ainda:** Edge Function contra o Storage real (depende de uma sessão autenticada no navegador); upload grande medido; homologação com contas reais (B14/B15).
 
 ## Reversão
 

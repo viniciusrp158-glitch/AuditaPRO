@@ -82,6 +82,26 @@ do $$ declare r jsonb; l jsonb; begin
   'path', (select v from t_ids where k = 'path1'), 'filename', 'pda.docx', 'size_bytes', 2048, 'sha256', repeat('b', 64),
   'mime_type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'));
  insert into t_ids values ('file1', r->>'file_id');
+ -- AD-15: remoção de arquivo de rascunho sem exclusão de linha; novo envio reutiliza o registro
+ r := public.corporate_library('remove_file', jsonb_build_object('file_id', pg_temp.id('file1')));
+ insert into t_res(name, ok, detail) values ('A16a remover arquivo do rascunho o retira da revisão',
+  jsonb_array_length(r->'revision'->'files') = 0 and r->>'path' = (select v from t_ids where k = 'path1'), r::text);
+ begin
+  perform public.corporate_library('publish', jsonb_build_object('revision_id', pg_temp.id('rev1')));
+  insert into t_res(name, ok, detail) values ('A16c sem arquivo ativo não publica', false, 'publicou');
+ exception when others then insert into t_res(name, ok, detail) values ('A16c sem arquivo ativo não publica', position('arquivo' in sqlerrm) > 0, sqlerrm); end;
+ r := public.corporate_library('authorize_upload', jsonb_build_object('revision_id', pg_temp.id('rev1'), 'format', 'docx'));
+ insert into t_ids values ('path1b', r->>'path');
+end $$;
+reset role;
+insert into storage.objects (bucket_id, name, metadata) values ('corporate-library', (select v from t_ids where k = 'path1b'), '{"size": 3072}');
+set local role authenticated;
+do $$ declare r jsonb; l jsonb; begin
+ r := public.corporate_library('register_file', jsonb_build_object('revision_id', pg_temp.id('rev1'), 'format', 'docx',
+  'path', (select v from t_ids where k = 'path1b'), 'filename', 'pda-v2.docx', 'size_bytes', 3072, 'sha256', repeat('c', 64),
+  'mime_type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'));
+ insert into t_res(name, ok, detail) values ('A16d novo envio do mesmo formato reutiliza o registro do rascunho',
+  r->>'file_id' = (select v from t_ids where k = 'file1') and r->'revision'->'files'->0->>'filename' = 'pda-v2.docx', r::text);
  perform public.corporate_library('update_revision', jsonb_build_object('revision_id', pg_temp.id('rev1'), 'revision_label', 'Rev.01',
   'responsible', 'Responsável Técnico', 'issued_on', '2026-10-11'));
  r := public.corporate_library('publish', jsonb_build_object('revision_id', pg_temp.id('rev1')));
@@ -141,7 +161,7 @@ do $$ declare r jsonb; l jsonb; begin
  l := public.corporate_library('list', '{"status":"rascunho"}');
  insert into t_res(name, ok, detail) values ('U03 filtro de rascunho ignorado p/ auditor', (l->>'total')::int = 1, l::text);
  r := public.corporate_library('download', jsonb_build_object('file_id', pg_temp.id('file1')));
- insert into t_res(name, ok, detail) values ('U04 auditor baixa vigente', r->>'path' = (select v from t_ids where k = 'path1'), r::text);
+ insert into t_res(name, ok, detail) values ('U04 auditor baixa vigente', r->>'path' = (select v from t_ids where k = 'path1b'), r::text);
  l := public.corporate_library('list', '{"search":"inexistente"}');
  insert into t_res(name, ok, detail) values ('U05 busca sem resultado', (l->>'total')::int = 0 and l->'items' = '[]'::jsonb, l::text);
 end $$;
@@ -179,6 +199,8 @@ select pg_temp.expect_error('I01 conta inativa recusada', 'list', '{}', 'sessão
 reset role;
 
 -- Defesa em profundidade (postgres): arquivo emitido é imutável e revisão não é excluída.
+insert into t_res(name, ok, detail) select 'A16b remoção registrada no histórico do sistema, sem apagar a linha',
+ exists (select 1 from public.audit_events e where e.event_type = 'corporate_file_removed') and exists (select 1 from private.corporate_document_files where id = pg_temp.id('file1')), 'ok';
 do $$ begin
  update private.corporate_document_files set filename = 'x' where id = pg_temp.id('file1');
  insert into t_res(name, ok, detail) values ('D01 arquivo imutável', false, 'alterou');

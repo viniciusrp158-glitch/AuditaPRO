@@ -42,7 +42,7 @@ Nenhuma Edge Function nova.
 
 ## Pendente / limites
 
-- **B09:** publicar o rascunho, materializando `schedule_items` e `schedule_requirements`, gravar o snapshot em `audit_plan_versions` e renumerar só os dias não iniciados. A recriação dos vínculos usa `delete` e vai pedir a aprovação do proprietário.
+- **B09:** publicar o rascunho, materializando `schedule_items` e `schedule_requirements`, gravar o snapshot em `audit_plan_versions` e renumerar só os dias não iniciados. Pela regra AD-15, os vínculos serão atualizados por marcação ou versão, sem DELETE.
 - **B09/B11:** guardar o "plano vigente ao abrir o dia". O legado já tem as chaves `original_plan` e `opening_plan`, que serão preenchidas na publicação e na abertura do dia.
 - Arrastar para reordenar (complementar) não foi feito; os botões cobrem o critério.
 - Homologação com contas reais: B14/B15.

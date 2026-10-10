@@ -1,5 +1,32 @@
--- PENDENTE DE APLICAÇÃO na produção (aguarda aprovação do proprietário no conector: contém DELETE de arquivo de rascunho).
 -- B05 Parte 4/4: gestão do Administrador — arquivos, publicação, cancelamento e arquivamento. Aditiva.
+-- Sem exclusão de linhas (AD-15): arquivo de rascunho removido fica marcado (removed_at/removed_by) e o histórico registra a remoção;
+-- novo envio do mesmo formato reutiliza a linha do rascunho. Arquivos de revisão emitida continuam imutáveis.
+alter table private.corporate_document_files add column removed_at timestamptz, add column removed_by uuid references auth.users(id);
+
+create or replace function private.corporate_file_guard() returns trigger
+ language plpgsql set search_path = '' as $$
+begin
+ if exists (select 1 from private.corporate_document_revisions r where r.id = old.revision_id and r.status <> 'draft') then
+  raise exception 'Arquivo de revisão emitida é imutável: não pode ser alterado nem removido' using errcode = '42501';
+ end if;
+ if tg_op = 'UPDATE' and (new.revision_id <> old.revision_id or new.format <> old.format or new.id <> old.id) then
+  raise exception 'Arquivo registrado é imutável' using errcode = '42501';
+ end if;
+ return case when tg_op = 'UPDATE' then new else old end;
+end;$$;
+
+create or replace function private.corporate_revision_json(rev uuid) returns jsonb
+ language sql stable security definer set search_path = '' as $$
+ select jsonb_build_object('id', r.id, 'revision_label', r.revision_label, 'status', r.status,
+  'responsible', r.responsible, 'issued_on', r.issued_on, 'change_summary', r.change_summary,
+  'published_at', r.published_at, 'superseded_at', r.superseded_at, 'cancelled_at', r.cancelled_at,
+  'created_at', r.created_at,
+  'files', coalesce((select jsonb_agg(jsonb_build_object('id', f.id, 'format', f.format, 'filename', f.filename,
+     'size_bytes', f.size_bytes, 'sha256', f.sha256, 'uploaded_at', f.uploaded_at) order by f.format)
+   from private.corporate_document_files f where f.revision_id = r.id and f.removed_at is null), '[]'::jsonb))
+ from private.corporate_document_revisions r where r.id = rev;
+$$;
+
 create function private.corporate_library_lifecycle(command text, payload jsonb) returns jsonb
  language plpgsql security definer set search_path = '' as $$
 #variable_conflict use_variable
@@ -25,7 +52,7 @@ begin
   select * into r from private.corporate_document_revisions where id = (payload->>'revision_id')::uuid;
   if r.id is null or r.status <> 'draft' then raise exception 'Arquivos só podem ser incluídos em revisão em rascunho'; end if;
   if fmt not in ('pdf','docx','dotx') then raise exception 'Formato não permitido. Use PDF, DOCX ou DOTX'; end if;
-  if exists (select 1 from private.corporate_document_files x where x.revision_id = r.id and x.format = fmt) then
+  if exists (select 1 from private.corporate_document_files x where x.revision_id = r.id and x.format = fmt and x.removed_at is null) then
    raise exception 'Esta revisão já possui arquivo %; remova-o antes de enviar outro', upper(fmt);
   end if;
   return jsonb_build_object('bucket', 'corporate-library',
@@ -42,9 +69,17 @@ begin
   if obj_size is null or obj_size <> (payload->>'size_bytes')::bigint then
    raise exception 'Envio incompleto: arquivo não confirmado no armazenamento';
   end if;
-  insert into private.corporate_document_files (revision_id, format, storage_path, filename, size_bytes, sha256, mime_type, uploaded_by)
-  values (r.id, fmt, path, left(payload->>'filename', 200), obj_size, lower(payload->>'sha256'), payload->>'mime_type', actor)
-  returning * into f;
+  select * into f from private.corporate_document_files x where x.revision_id = r.id and x.format = fmt for update;
+  if f.id is not null and f.removed_at is null then raise exception 'Esta revisão já possui arquivo %', upper(fmt); end if;
+  if f.id is null then
+   insert into private.corporate_document_files (revision_id, format, storage_path, filename, size_bytes, sha256, mime_type, uploaded_by)
+   values (r.id, fmt, path, left(payload->>'filename', 200), obj_size, lower(payload->>'sha256'), payload->>'mime_type', actor)
+   returning * into f;
+  else
+   update private.corporate_document_files set storage_path = path, filename = left(payload->>'filename', 200), size_bytes = obj_size,
+    sha256 = lower(payload->>'sha256'), mime_type = payload->>'mime_type', uploaded_by = actor, uploaded_at = clock_timestamp(),
+    removed_at = null, removed_by = null where id = f.id returning * into f;
+  end if;
   perform private.corporate_log('corporate_file_added', r.document_id, r.id,
    jsonb_build_object('format', fmt, 'filename', f.filename, 'size_bytes', f.size_bytes, 'sha256', f.sha256));
   return jsonb_build_object('file_id', f.id, 'revision', private.corporate_revision_json(r.id));
@@ -53,8 +88,8 @@ begin
  if command = 'remove_file' then
   select * into f from private.corporate_document_files where id = (payload->>'file_id')::uuid;
   select * into r from private.corporate_document_revisions where id = f.revision_id for update;
-  if f.id is null or r.status <> 'draft' then raise exception 'Somente arquivos de revisão em rascunho podem ser removidos'; end if;
-  delete from private.corporate_document_files where id = f.id;
+  if f.id is null or f.removed_at is not null or r.status <> 'draft' then raise exception 'Somente arquivos de revisão em rascunho podem ser removidos'; end if;
+  update private.corporate_document_files set removed_at = clock_timestamp(), removed_by = actor where id = f.id;
   perform private.corporate_log('corporate_file_removed', r.document_id, r.id, jsonb_build_object('format', f.format, 'filename', f.filename));
   return jsonb_build_object('bucket', 'corporate-library', 'path', f.storage_path, 'revision', private.corporate_revision_json(r.id));
  end if;
@@ -66,7 +101,7 @@ begin
   select * into r from private.corporate_document_revisions where id = r.id for update;
   if r.status <> 'draft' then raise exception 'Somente revisão em rascunho pode ser disponibilizada'; end if;
   if d.archived_at is not null then raise exception 'Documento arquivado não pode receber revisão vigente'; end if;
-  if not exists (select 1 from private.corporate_document_files x where x.revision_id = r.id) then
+  if not exists (select 1 from private.corporate_document_files x where x.revision_id = r.id and x.removed_at is null) then
    raise exception 'A revisão precisa de ao menos um arquivo íntegro';
   end if;
   if r.responsible is null or r.issued_on is null then
